@@ -25,9 +25,11 @@ function parse(args, permitted) {
   return { positional, options };
 }
 
-const help = `genesis-applet
+const help = `let-applet (also installed as genesis-applet)
   create <directory> --origin <https://host> [--id <id>] [--name <name>]
          [--template react|vanilla]              default react
+         [--kind web] [--language typescript|javascript]
+                                                 default web, typescript
   check <directory>
   build <directory> [--out <directory>] [--debug]
                                                  default <directory>/dist
@@ -68,7 +70,7 @@ async function main(args) {
   };
   switch (command) {
     case 'create': {
-      const { positional, options } = parse(args.slice(1), ['json', 'origin', 'id', 'name', 'template']);
+      const { positional, options } = parse(args.slice(1), ['json', 'origin', 'id', 'name', 'template', 'kind', 'language']);
       return ['create', await createApplet(one(positional, 'target directory'), options)];
     }
     case 'check': {

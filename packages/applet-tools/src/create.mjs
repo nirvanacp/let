@@ -1,6 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { COMPAT, FRAMEWORK_VERSION } from '@let/core';
+import { transform } from 'esbuild';
+import { APPLET_CHOICES, COMPAT, FRAMEWORK_VERSION, requireImplemented } from '@let/core';
 import { emptyDirectory, exportKit } from './kit.mjs';
 import { toolError } from './manifest.mjs';
 
@@ -250,14 +251,29 @@ function compatTable() {
     + `| SDK and tools | ${FRAMEWORK_VERSION} |\n| Kit | ${FRAMEWORK_VERSION} (see \`let/kit.json\`) |`;
 }
 
+/** Removes the types from a TypeScript source and keeps its JSX, for the JavaScript variant. */
+async function stripTypes(source, file) {
+  const { code } = await transform(source, { loader: file.endsWith('x') ? 'tsx' : 'ts', jsx: 'preserve', format: 'esm', target: 'es2022' });
+  return code;
+}
+
+/** `src/main.tsx` becomes `src/main.jsx`, `src/page.ts` becomes `src/page.js`. */
+function javascriptName(file) {
+  return file.replace(/\.ts(x?)$/, '.js$1');
+}
+
 /**
  * Scaffolds a schema 6 applet from a template (`react` by default, or `vanilla`): one context, a
  * page module with one reader, one routed screen that shows one watch and runs one input.
+ * `--language javascript` writes the same sources with the types removed and no tsconfig.json.
  */
 export async function createApplet(directory, options) {
   let origin;
   try { origin = new URL(options.origin ?? ''); } catch { throw toolError('USAGE', 'create requires --origin <https://host>'); }
   if (origin.protocol !== 'https:' || origin.origin !== options.origin.replace(/\/$/, '')) throw toolError('USAGE', '--origin must be an exact https://host origin');
+  const kind = options.kind ?? 'web', language = options.language ?? 'typescript';
+  try { requireImplemented(APPLET_CHOICES, [kind, language]); } catch (error) { throw toolError('NOT_IMPLEMENTED', error.message); }
+  const javascript = language === 'javascript';
   const templateName = options.template ?? 'react';
   const template = Object.hasOwn(TEMPLATES, templateName) ? TEMPLATES[templateName] : null;
   if (!template) throw toolError('USAGE', `--template must be one of ${Object.keys(TEMPLATES).join(', ')}`);
@@ -269,7 +285,7 @@ export async function createApplet(directory, options) {
     foreground: { kind: 'web', entry: 'index.html' },
     contexts: [{ id: 'primary', startUrl: origin.origin + '/' }],
     capabilities: {},
-    build: { foreground: { entry: template.entry }, page: 'src/page.ts' },
+    build: { foreground: { entry: javascript ? javascriptName(template.entry) : template.entry }, page: javascript ? 'src/page.js' : 'src/page.ts' },
   };
   const output = await emptyDirectory(directory);
   const { local, file: stamp } = localStamp(new Date());
@@ -284,19 +300,20 @@ export async function createApplet(directory, options) {
   const files = {
     'applet.json': JSON.stringify(manifest, null, 2) + '\n',
     'package.json': JSON.stringify(packageJson, null, 2) + '\n',
-    'tsconfig.json': JSON.stringify(tsconfig, null, 2) + '\n',
     '.gitignore': 'node_modules/\ndist/\n.env\n.env.*\n*.sqlite3\n*.sqlite3-*\n*.pem\n',
-    'src/page.ts': PAGE,
-    'src/routes.ts': ROUTES,
-    [template.entry]: template.main,
     'src/theme.css': THEME,
-    'src/css.d.ts': 'declare module "*.css";\n',
     'AGENTS.md': '# Applet workspace\n\nFollow [let/AGENTS.md](let/AGENTS.md) for every change. Read [.specs/current.md](.specs/current.md) first and keep `.specs` and `.changelog` current.\n',
     'README.md': `# ${label}\n\nA Genesis applet over ${site}. The current state is in [.specs/current.md](.specs/current.md).\n\n## Build\n\n\`\`\`sh\nnpm install\nnpm run check\nnpm run build\nnpx genesis-applet dev install . --device <serial>\n\`\`\`\n\nSetup is described in [let/factory/applets/guides/getting-started.md](let/factory/applets/guides/getting-started.md).\n`,
-    '.specs/current.md': `# Current specification\n\n## Identity\n\nName ${label}, id \`${id}\`, origin ${site}. Created ${local}. Template \`${templateName}\`: the UI is ${template.ui}.\n\n${compatTable()}\n\n## Product scope\n\nNot established yet. Record the user's goals, preserved website workflows and exclusions here.\n\n## Contexts\n\n| Context | Start URL |\n| --- | --- |\n| primary | ${site}/ |\n\n## Routes\n\nThe router table is in \`src/routes.ts\`.\n\n| Route id | Pattern and example URL | Screen | Context | Ready reader | Loading, empty, sign-in and error | Back | Status | Evidence |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| home | \`/\`, ${site}/ | home | primary | none: ready once bound | loading, empty and error notices; no sign-in | leaves the applet from the start page | implemented | none: scaffold, not verified |\n\nAny other URL shows the website.\n\n## Page module\n\n\`src/page.ts\`: list reader \`links\`, keyed by URL and occurrence, extent the surrounding list item or paragraph. No commands. Screen \`home\` watches it as \`home:links\` and clicks a link through the page agent, by its record.\n\n## Verification\n\nNot run.\n`,
+    '.specs/current.md': `# Current specification\n\n## Identity\n\nName ${label}, id \`${id}\`, origin ${site}. Created ${local}. Template \`${templateName}\`, ${javascript ? 'JavaScript' : 'TypeScript'}: the UI is ${template.ui}.\n\n${compatTable()}\n\n## Product scope\n\nNot established yet. Record the user's goals, preserved website workflows and exclusions here.\n\n## Contexts\n\n| Context | Start URL |\n| --- | --- |\n| primary | ${site}/ |\n\n## Routes\n\nThe router table is in \`src/routes.ts\`.\n\n| Route id | Pattern and example URL | Screen | Context | Ready reader | Loading, empty, sign-in and error | Back | Status | Evidence |\n| --- | --- | --- | --- | --- | --- | --- | --- | --- |\n| home | \`/\`, ${site}/ | home | primary | none: ready once bound | loading, empty and error notices; no sign-in | leaves the applet from the start page | implemented | none: scaffold, not verified |\n\nAny other URL shows the website.\n\n## Page module\n\n\`src/page.ts\`: list reader \`links\`, keyed by URL and occurrence, extent the surrounding list item or paragraph. No commands. Screen \`home\` watches it as \`home:links\` and clicks a link through the page agent, by its record.\n\n## Verification\n\nNot run.\n`,
     '.specs/decisions.md': `# Decisions\n\n## decision-0001: Scaffold\n\n- Date: ${local}.\n- Choice: template \`${templateName}\`, one context \`primary\`, one route \`home\` to screen \`home\`, no storage or services.\n- Evidence: generated by \`genesis-applet create\`; nothing verified yet.\n`,
     [`.changelog/${stamp}-scaffold.md`]: `# Scaffold\n\n- Goal: start applet \`${id}\` for ${site}.\n- Changes: manifest, page module, router table, one screen, records, from the \`${templateName}\` template.\n- Verification: not run.\n`,
   };
+  const sources = { 'src/page.ts': PAGE, 'src/routes.ts': ROUTES, [template.entry]: template.main };
+  if (javascript) {
+    for (const [name, content] of Object.entries(sources)) files[javascriptName(name)] = await stripTypes(content, name);
+  } else {
+    Object.assign(files, sources, { 'tsconfig.json': JSON.stringify(tsconfig, null, 2) + '\n', 'src/css.d.ts': 'declare module "*.css";\n' });
+  }
   for (const [name, content] of Object.entries(files)) {
     await mkdir(path.dirname(path.join(output, name)), { recursive: true });
     await writeFile(path.join(output, name), content, { flag: 'wx' });

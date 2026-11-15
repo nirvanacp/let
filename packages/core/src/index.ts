@@ -8,3 +8,5 @@ export * from "./bundle.js";
 export * from "./release.js";
 export * from "./locator.js";
 export * from "./readspec.js";
+export * from "./choices.js";
+export * from "./servelet.js";
