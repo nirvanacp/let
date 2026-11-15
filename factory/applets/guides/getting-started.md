@@ -26,7 +26,7 @@ The scaffold contains:
 | `src/main.tsx` (react) or `src/main.ts` (vanilla) | The UI: the router, the `home` screen with one watch, and one click |
 | `src/theme.css` | Light and dark tokens, and the space for the menu button |
 | `.specs/`, `.changelog/` | Applet records, already started; the current spec lists the compatibility values |
-| `factory/` | This kit |
+| `let/` | This kit |
 | `AGENTS.md`, `README.md` | Pointers to the kit and the records |
 
 ## The first watch

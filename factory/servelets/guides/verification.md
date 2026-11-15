@@ -33,7 +33,7 @@ curl -s 'http://127.0.0.1:8790/v1/notes?limit=10'
 
 ## On a device
 
-1. Build and check the applet that uses the servelet: `npm run check` and `npm run build` in the applet directory. The build output lists `servelets/<serviceId>/servelet.wasm`.
+1. Build and check the applet that uses the servelet: `npm run check` and `npm run build` in the applet directory. `dist/servelets/<serviceId>/servelet.wasm` exists afterwards.
 2. Install it with `genesis-applet dev install . --device <serial>` and walk each journey that reads or writes the servelet's records: create, edit, delete, a conflict where the applet offers one, Back, and leaving and reopening the applet. Records must persist across a force stop.
 3. Check the failure paths the applet shows: an empty list, a record that is gone, and a stale edit.
 4. Record the evidence in the applet's current spec: device, build, what was walked and what was not.
