@@ -1,0 +1,19 @@
+{
+  "name": "let",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "engines": {
+    "node": "24.15.0",
+    "npm": "11.14.1"
+  },
+  "packageManager": "npm@11.14.1",
+  "scripts": {
+    "typecheck": "npm run build -w packages/core && node packages/sdk/build.mjs && npm run typecheck --workspaces"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2",
+    "esbuild": "0.28.2"
+  }
+}

@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+packages/core/dist/
+packages/sdk/dist/
+packages/sdk/.build-lock
+packages/applet-tools/kit/
+dist/
