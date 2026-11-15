@@ -2,7 +2,7 @@ import { build } from 'esbuild';
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { BUNDLE_FORMAT, COMPAT, isBundlePath, REQUIRED_BUNDLE_FILES } from '@genesis/core';
+import { BUNDLE_FORMAT, COMPAT, isBundlePath, REQUIRED_BUNDLE_FILES } from '@let/core';
 import { checkApplet, noReactInPage, PAGE_ENTRY, pageEntry, runCommand, uiWarnings } from './check.mjs';
 import { bundleCompat, installedSdk } from './compat.mjs';
 import { containedFile, requireValue, sha256 } from './manifest.mjs';
@@ -191,7 +191,7 @@ export async function buildApplet(directory, output, { debug = false, builtAt } 
 
   const names = [...files.keys()].sort();
   const sdk = await installedSdk(base);
-  requireValue(sdk, `${base} does not resolve @genesis/sdk; run npm install`);
+  requireValue(sdk, `${base} does not resolve @let/sdk; run npm install`);
   const bundleJson = {
     format: BUNDLE_FORMAT, compat: bundleCompat(sdk, time), manifest,
     files: names.map(name => ({ path: name, sha256: sha256(files.get(name)) })),

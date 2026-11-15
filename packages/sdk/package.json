@@ -1,5 +1,5 @@
 {
-  "name": "@genesis/sdk",
+  "name": "@let/sdk",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -42,6 +42,6 @@
     "dist"
   ],
   "dependencies": {
-    "@genesis/core": "0.0.0"
+    "@let/core": "0.0.0"
   }
 }

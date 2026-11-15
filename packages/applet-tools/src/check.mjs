@@ -30,8 +30,8 @@ const PAGE_ENTRY = 'genesis:page-entry';
  */
 export function pageEntry(base, page) {
   const contents = page === undefined
-    ? 'import { startAgent } from "@genesis/sdk/page";\nstartAgent();\n'
-    : `import { startAgent } from "@genesis/sdk/page";\nimport definition from ${JSON.stringify('./' + page)};\nstartAgent(definition);\n`;
+    ? 'import { startAgent } from "@let/sdk/page";\nstartAgent();\n'
+    : `import { startAgent } from "@let/sdk/page";\nimport definition from ${JSON.stringify('./' + page)};\nstartAgent(definition);\n`;
   return {
     name: 'genesis-page-entry',
     setup(builder) {

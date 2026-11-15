@@ -416,8 +416,8 @@ A skeleton is drawn per screen, shaped like that screen's content, from the `.sk
 ```tsx
 // src/ui/states.tsx
 import { useRef, type ReactNode } from "react";
-import { useRouter } from "@genesis/sdk/react";
-import type { ErrorBody } from "@genesis/sdk";
+import { useRouter } from "@let/sdk/react";
+import type { ErrorBody } from "@let/sdk";
 import { RetryButton } from "./feedback";
 
 /** A list placeholder: avatar and text rows. Build other shapes from the same .sk classes. */
@@ -468,7 +468,7 @@ export function LoadError({ error, site }: { error: ErrorBody | null | undefined
 ```tsx
 // src/ui/pull.tsx
 import { useEffect, useRef, useState, type TouchEvent } from "react";
-import { useRouter } from "@genesis/sdk/react";
+import { useRouter } from "@let/sdk/react";
 
 const PULL_TRIGGER = 72; // px of indicator travel that arms a refresh
 const PULL_MAX = 112;
@@ -534,7 +534,7 @@ The shell renders one stage for the screen, the ghost layer, the tab bar on tab 
 ```tsx
 // src/app.tsx
 import { useRef, type ComponentType } from "react";
-import { useRouter } from "@genesis/sdk/react";
+import { useRouter } from "@let/sdk/react";
 import { GhostLayer, Stage, usePlaceMotion, type Place } from "./ui/motion";
 import { ToastProvider, ToastRegion } from "./ui/feedback";
 import { FeedScreen } from "./screens/feed";
@@ -578,7 +578,7 @@ A screen renders its states in a fixed order: error with nothing to show, a conf
 
 ```tsx
 // src/screens/feed.tsx
-import { ScrollMemory, useRouter, useWatch } from "@genesis/sdk/react";
+import { ScrollMemory, useRouter, useWatch } from "@let/sdk/react";
 import { ProgressBar } from "../ui/feedback";
 import { LoadError, Notice, Skeleton, useSawLoading } from "../ui/states";
 import { PullIndicator, usePullToRefresh } from "../ui/pull";

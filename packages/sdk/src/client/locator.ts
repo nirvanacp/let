@@ -1,4 +1,4 @@
-import type { Field, Locator, Take } from "@genesis/core";
+import type { Field, Locator, Take } from "@let/core";
 
 /**
  * Builders for locators and fields. They return the plain wire objects, so a locator written by

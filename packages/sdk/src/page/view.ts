@@ -1,4 +1,4 @@
-import { entryKey, type ViewId } from "@genesis/core";
+import { entryKey, type ViewId } from "@let/core";
 import { watchNavigation } from "./engine/observe.js";
 
 /**

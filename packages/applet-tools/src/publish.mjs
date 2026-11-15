@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
-import { RELEASE_FORMAT, validateReleaseRecord } from '@genesis/core';
+import { RELEASE_FORMAT, validateReleaseRecord } from '@let/core';
 import { buildApplet } from './build.mjs';
 import { TOOLS_VERSION } from './compat.mjs';
 import { readApplet, requireValue, sha256, toolError } from './manifest.mjs';
@@ -14,16 +14,21 @@ export const PUBLISHED = 'published';
 export const bundleName = id => `applet-${id}.bundle.json`;
 export const recordName = id => `applet-${id}.release.json`;
 
-/** The Genesis checkout these tools run from, or null when they were installed from a package. */
+/**
+ * The Genesis checkout these tools run from, or null when they were installed from a package.
+ * The tools live at `let/packages/applet-tools/src` inside it.
+ */
 export function genesisRoot() {
-  const root = fileURLToPath(new URL('../../../', import.meta.url));
+  const root = fileURLToPath(new URL('../../../../', import.meta.url));
   try {
     const json = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-    return Array.isArray(json.workspaces) && existsSync(path.join(root, 'packages/applet-tools')) ? path.resolve(root) : null;
+    return Array.isArray(json.workspaces) && existsSync(path.join(root, 'let/packages/applet-tools')) ? path.resolve(root) : null;
   } catch { return null; }
 }
 
-const GENESIS_PATHS = ['packages', 'tools', 'package.json', 'package-lock.json'];
+const GENESIS_PATHS = ['tools', 'package.json', 'package-lock.json'];
+// The framework is its own repository inside the Genesis checkout; its build inputs must be committed too.
+const LET_PATHS = ['packages', 'go', 'package.json'];
 
 /** The Genesis commit that builds the release. Refuses when the build inputs differ from it. */
 function genesisCommit({ requireClean }) {
@@ -32,6 +37,8 @@ function genesisCommit({ requireClean }) {
   if (requireClean) {
     const dirty = git(root, ['status', '--porcelain', '--', ...GENESIS_PATHS]);
     requireValue(!dirty, `The Genesis checkout has uncommitted changes, so its commit would not describe the build:\n${dirty}\nCommit them first.`);
+    const framework = git(path.join(root, 'let'), ['status', '--porcelain', '--', ...LET_PATHS]);
+    requireValue(!framework, `The Let checkout has uncommitted changes, so the build would not match a commit:\n${framework}\nCommit them first.`);
   }
   const commit = git(root, ['rev-parse', 'HEAD']);
   const pushed = git(root, ['branch', '-r', '--contains', commit], { allowFailure: true });

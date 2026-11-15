@@ -1,7 +1,7 @@
 import { access, mkdir, cp, readdir, writeFile, lstat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { COMPAT, FRAMEWORK_VERSION } from '@genesis/core';
+import { COMPAT, FRAMEWORK_VERSION } from '@let/core';
 import { toolError as creatorError } from './manifest.mjs';
 
 /** `kit.json`: the kit, the tools and the SDK share `FRAMEWORK_VERSION`, and build against `COMPAT`. */
@@ -17,10 +17,11 @@ export async function emptyDirectory(directory) {
 export async function exportKit(directory) {
   const output = await emptyDirectory(directory);
   const packed = fileURLToPath(new URL('../kit/', import.meta.url));
-  let source = fileURLToPath(new URL('../../../factory/', import.meta.url));
-  try { await access(path.join(source, 'AGENTS.md')); }
+  // In the Let repository the kit comes from its root; an installed package carries a packed copy.
+  let source = fileURLToPath(new URL('../../../', import.meta.url));
+  try { await access(path.join(source, 'factory', 'applets', 'AGENTS.md')); }
   catch { source = packed; }
-  for (const name of ['AGENTS.md','README.md','guides','skills','templates']) await cp(path.join(source, name), path.join(output, name), { recursive: true, errorOnExist: true, force: false });
+  for (const name of ['AGENTS.md', 'README.md', 'factory']) await cp(path.join(source, name), path.join(output, name), { recursive: true, errorOnExist: true, force: false });
   await writeFile(path.join(output, 'kit.json'), JSON.stringify(VERSIONS, null, 2) + '\n');
   return { output, ...VERSIONS };
 }

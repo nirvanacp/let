@@ -2,7 +2,7 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { parseSourceManifest } from '@genesis/core';
+import { parseSourceManifest } from '@let/core';
 
 export function toolError(code, message) { return Object.assign(new Error(message), { code }); }
 export function requireValue(condition, message) { if (!condition) throw toolError('INVALID_PACKAGE', message); }
@@ -34,7 +34,7 @@ function readService(value, file) {
 }
 
 /**
- * Reads and validates `applet.json` with the schema rules in `@genesis/core`, splitting it into
+ * Reads and validates `applet.json` with the schema rules in `@let/core`, splitting it into
  * the manifest the bundle carries and the `build` section only the tools use. Also loads the
  * service declaration `serviceFile`, or the first declared service's config when none is given.
  */

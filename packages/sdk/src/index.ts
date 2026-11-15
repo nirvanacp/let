@@ -1,5 +1,5 @@
 /**
- * `@genesis/sdk`: the client a UI document uses to drive an applet's contexts. It depends on no
+ * `@let/sdk`: the client a UI document uses to drive an applet's contexts. It depends on no
  * UI framework; only the default transport needs the WebView bridge.
  */
 export { connect, openSession } from "./client/session.js";
@@ -61,4 +61,4 @@ export type {
   ShareInput,
   UrlGuard,
   ViewId,
-} from "@genesis/core";
+} from "@let/core";

@@ -11,7 +11,7 @@ import {
   type Method,
   type PageEmitEvent,
   type ShareInput,
-} from "@genesis/core";
+} from "@let/core";
 import { GenesisError } from "../bridge.js";
 import type { Storage } from "../types.js";
 import { createContext, type ContextHandle, type ContextControl } from "./context.js";

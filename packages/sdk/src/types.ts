@@ -1,9 +1,9 @@
-import type { ErrorCode } from "@genesis/core";
+import type { ErrorCode } from "@let/core";
 import { GenesisError } from "./bridge.js";
 
 export { GenesisError };
 
-export type { ActionResult } from "@genesis/core";
+export type { ActionResult } from "@let/core";
 
 export interface StoredDocument<T = unknown> {
   key: string;

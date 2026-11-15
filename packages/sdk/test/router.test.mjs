@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, test } from "node:test";
 // The router imports values from other SDK modules, so this test runs the built entries.
-import { COMPAT } from "@genesis/core";
+import { COMPAT } from "@let/core";
 import { connect } from "../dist/index.js";
 import { createRouter } from "../dist/router.js";
 

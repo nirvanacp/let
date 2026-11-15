@@ -16,5 +16,5 @@ export const COMPAT = {
 
 export type Compat = typeof COMPAT;
 
-/** The version of @genesis/core, @genesis/sdk, @genesis/applet-tools and the kit. */
+/** The version of @let/core, @let/sdk, @let/applet-tools and the kit. */
 export const FRAMEWORK_VERSION = "0.0.0";

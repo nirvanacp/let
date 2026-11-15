@@ -2,10 +2,10 @@
 
 A page module is applet code that runs inside the website page, next to the Genesis page agent. It names readers, which turn parts of the page into JSON, and commands, which decide what to do on the page. The UI asks for a reader through a watch or a `read` with `{ reader: "name" }`, and runs a command with `invoke`. The [page control guide](page-control.md) covers the calls the UI makes; this guide covers the code that answers them. Signatures are in the [SDK reference](sdk-reference.md).
 
-`build.page` in `applet.json` names the module file. Its default export is `definePageModule(...)` from `@genesis/sdk/page`:
+`build.page` in `applet.json` names the module file. Its default export is `definePageModule(...)` from `@let/sdk/page`:
 
 ```ts
-import { definePageModule, list, one, value } from "@genesis/sdk/page";
+import { definePageModule, list, one, value } from "@let/sdk/page";
 
 const stories = list({
   root: "#hnmain",
@@ -180,7 +180,7 @@ A command returns one of three things:
 | Any other value | `{ outcome: "observed", value }`, with `undefined` sent as `null`. Use this for a read that needs arguments. |
 
 ```ts
-import { definePageModule, type CommandSteps } from "@genesis/sdk/page";
+import { definePageModule, type CommandSteps } from "@let/sdk/page";
 
 /** HN hides the up arrow of a story the person has voted on. */
 const isVoted = (id: string, doc: Document) => doc.querySelector(`[id="up_${id}"]`)?.classList.contains("nosee") === true;
@@ -217,7 +217,7 @@ The steps themselves fail as `run` does, for example with `TARGET_NOT_FOUND` or 
 - `definePageModule` itself rejects names that do not match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$`, readers not made with `list`, `one` or `value`, missing or empty selectors, a `read`, `key` or `extent` that is not a function, and commands that are not functions. Its error names the first bad field.
 - A reader with an `async` function gets a warning.
 - Each of the applet's own module files is checked line by line, skipping comments and the contents of strings, template literals and regular expressions. A line fails with `PAGE_MODULE_INVALID` and one of these reasons:
-  - `imports <name>; page modules run in the website page and use no UI framework`, for `react`, `react-dom`, `vue`, `svelte`, `solid-js`, `preact` or `@genesis/sdk/react`, by `import`, `import()` or `require`;
+  - `imports <name>; page modules run in the website page and use no UI framework`, for `react`, `react-dom`, `vue`, `svelte`, `solid-js`, `preact` or `@let/sdk/react`, by `import`, `import()` or `require`;
   - `calls eval`, `uses new Function`, `calls fetch; page modules make no network calls` or `uses XMLHttpRequest; page modules make no network calls`;
   - `reads document.cookie`, or `uses <name>; page modules keep no storage` for `localStorage`, `sessionStorage` and `indexedDB`;
   - `uses <name>; page modules read the DOM, not the website's JavaScript` for `wrappedJSObject`, `unsafeWindow`, `cloneInto` and `exportFunction`, and `reads <name>; page modules read the DOM, not the website's JavaScript` for `__reactFiber`, `__reactProps`, `__reactInternalInstance`, `__vue__`, `__NEXT_DATA__` and `__NUXT__`. The React keys end in a random suffix, so they are found inside strings too; reading the text of `<script id="__NEXT_DATA__">` by a selector stays allowed;
@@ -225,7 +225,7 @@ The steps themselves fail as `run` does, for example with `TARGET_NOT_FOUND` or 
   - `reads navigator.<name>; page modules run the same in WebView and GeckoView and do not branch on the browser` for `userAgent`, `userAgentData`, `vendor`, `platform` and `appVersion`, also as `navigator["userAgent"]` or a destructured `{ userAgent } = navigator`.
 - These rules are a text lint, not a sandbox: they cover only files inside the applet directory (not `node_modules` or shared code outside it), and they miss code that reaches the same API indirectly, such as `window["fe" + "tch"]`. Keep page module code inside the applet so the lint sees it, and treat the rules as a guard against mistakes.
 
-The build refuses `@genesis/sdk/react` in the page script as well. Import from `@genesis/sdk/page` and pure helpers, and share types, not code with side effects, with the UI.
+The build refuses `@let/sdk/react` in the page script as well. Import from `@let/sdk/page` and pure helpers, and share types, not code with side effects, with the UI.
 
 ## Limits
 

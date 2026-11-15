@@ -26,7 +26,7 @@ import {
   type ScrollTo,
   type UrlGuard,
   type ViewId,
-} from "@genesis/core";
+} from "@let/core";
 import { GenesisError } from "../bridge.js";
 import { AnswerTimeout, type Session } from "./session.js";
 import { createWatchStore, type WatchStore, type WatchValue } from "./watch.js";

@@ -12,7 +12,7 @@ import {
   type Step,
   type ReadSpec,
   type WaitFor,
-} from "@genesis/core";
+} from "@let/core";
 import { waitUntil } from "./actionable.js";
 import { errorBody, PageError } from "./errors.js";
 import { prepare, type InputContext } from "./input.js";

@@ -1,4 +1,4 @@
-import { compareVersions, parseVersion } from '@genesis/core';
+import { compareVersions, parseVersion } from '@let/core';
 
 export { compareVersions as compare, parseVersion as parse };
 

@@ -1,4 +1,4 @@
-import type { ErrorCode } from "@genesis/core";
+import type { ErrorCode } from "@let/core";
 
 /** One item a read produced: JSON only, no nodes, callbacks or HTML. */
 export interface PageRecord {

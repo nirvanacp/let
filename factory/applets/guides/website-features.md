@@ -34,7 +34,7 @@ Picking files, saving, sharing, opening another app, turning notifications on an
 Every recipe below handles that error with the same helper:
 
 ```ts
-import { GenesisError } from "@genesis/sdk";
+import { GenesisError } from "@let/sdk";
 
 /** The message for a failed user action: a tap that came too late asks for another tap. */
 export function actionMessage(error: unknown, fallback: string): string {
@@ -58,8 +58,8 @@ Give the site's composer URL a route whose screen is the applet's composer. Open
 When the site's composer has no URL of its own, such as a dialog on the feed, open the applet's composer as an overlay screen instead, and on Post click the site's Compose button first. An overlay screen keeps the website covered while the page changes under it.
 
 ```tsx
-import { css, type ActionResult } from "@genesis/sdk";
-import { useFilePicker, useGenesis } from "@genesis/sdk/react";
+import { css, type ActionResult } from "@let/sdk";
+import { useFilePicker, useGenesis } from "@let/sdk/react";
 import { useState } from "react";
 import { actionMessage } from "../actions";
 
@@ -161,7 +161,7 @@ Use `via: "drop"` for a drop zone and `via: "paste"` for an editor that takes pa
 When the reader has the file's `https` URL, save it straight from the applet. The download carries the context's cookies, so signed-in media works:
 
 ```tsx
-import { useGenesis } from "@genesis/sdk/react";
+import { useGenesis } from "@let/sdk/react";
 import { useState } from "react";
 import { actionMessage } from "../actions";
 

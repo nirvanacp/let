@@ -9,7 +9,7 @@ import {
   type WatchPatch,
   type WatchSnapshot,
   type WatchStatus,
-} from "@genesis/core";
+} from "@let/core";
 import { GenesisError } from "../bridge.js";
 import { debounce } from "./engine/debounce.js";
 import { diffRegion, json, keepNear, mergeVirtualized, type PageRecord, type Region } from "./engine/diff.js";

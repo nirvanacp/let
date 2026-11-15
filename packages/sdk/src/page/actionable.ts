@@ -1,4 +1,4 @@
-import type { Locator } from "@genesis/core";
+import type { Locator } from "@let/core";
 import { PageError } from "./errors.js";
 import { locate, type RecordLookup } from "./locate.js";
 import { isVisible } from "./read.js";
