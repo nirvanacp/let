@@ -18,22 +18,25 @@ async function isDirectory(directory) {
 /**
  * The directory that holds servelets for an applet directory: the `servelets` option, then
  * `LET_SERVELETS_DIR`, then the `servelets/` directory of the nearest ancestor that has one.
+ * Returns null when no ancestor has one.
  */
 export async function serveletsRoot(appletDirectory, options = {}) {
   if (options.servelets) return path.resolve(options.servelets);
   if (process.env.LET_SERVELETS_DIR) return path.resolve(process.env.LET_SERVELETS_DIR);
   for (let directory = path.resolve(appletDirectory); ; directory = path.dirname(directory)) {
     if (await isDirectory(path.join(directory, 'servelets'))) return path.join(directory, 'servelets');
-    if (path.dirname(directory) === directory) break;
+    if (path.dirname(directory) === directory) return null;
   }
-  throw toolError('SERVELET_NOT_FOUND', `No servelets directory above ${appletDirectory}. Pass --servelets <dir> or set LET_SERVELETS_DIR.`);
 }
 
 /** Finds the directory of servelet `id` for an applet directory. */
 export async function locateServelet(appletDirectory, id, options = {}) {
-  const directory = path.join(await serveletsRoot(appletDirectory, options), id);
-  if (!(await isDirectory(directory))) throw toolError('SERVELET_NOT_FOUND', `Servelet ${id} is not in ${path.dirname(directory)}`);
-  return directory;
+  const root = await serveletsRoot(appletDirectory, options);
+  const where = root ? path.join(root, id) : `servelets/${id} in ${path.resolve(appletDirectory)} and its ancestors`;
+  if (!root || !(await isDirectory(path.join(root, id)))) {
+    throw toolError('SERVELET_NOT_FOUND', `Servelet ${id} not found; looked in ${where}. Pass --servelets <dir> or set LET_SERVELETS_DIR.`);
+  }
+  return path.join(root, id);
 }
 
 /** Reads and validates `servelet.json`; its id must equal the directory name. */

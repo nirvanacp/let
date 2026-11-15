@@ -16,7 +16,11 @@ function run(command, args) {
 export async function manageService(action, directory, options = {}) {
   if (!['start','status','stop','provision'].includes(action)) throw creatorError('USAGE', 'Unknown service action');
   if (options.local && action === 'provision') throw creatorError('USAGE', 'Local-only mode cannot provision a device');
-  const { base, manifest, service } = await readApplet(directory, { serviceFile: options['service-file'] });
+  const { base, manifest, services, service } = await readApplet(directory, { serviceFile: options['service-file'], servelets: options.servelets });
+  if (service?.runtime === 'local' || (!service && services.length > 0)) {
+    const local = service ? [service] : services;
+    return { appletId: manifest.id, services: local.map(s => s.serviceId), runtime: 'local', message: "This applet's services run on the phone; nothing to start." };
+  }
   if (!service) throw creatorError('SERVICE_DECLARATION_REQUIRED', 'This applet needs backend/service.json for local service tooling');
   const entry = await containedFile(base, service.entry);
   const device = options.local ? null : new Device(options);

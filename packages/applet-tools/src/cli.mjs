@@ -30,8 +30,8 @@ const help = `let-applet (also installed as genesis-applet)
          [--template react|vanilla]              default react
          [--kind web] [--language typescript|javascript]
                                                  default web, typescript
-  check <directory>
-  build <directory> [--out <directory>] [--debug]
+  check <directory> [--servelets <directory>]
+  build <directory> [--out <directory>] [--debug] [--servelets <directory>]
                                                  default <directory>/dist
   dev install <directory> --device <serial>      applet directory or build output
   dev status [<applet-id>] --device <serial>     status and mismatches of installed applets
@@ -53,6 +53,11 @@ which is bundled with esbuild and imported in Node, and for build the UI build
 (build.foreground.command, or esbuild from build.foreground.entry). This is not a
 sandbox; check only applets you trust.
 build --debug defines __GENESIS_DEBUG__ in the esbuild outputs.
+A local service ({ "runtime": "local", "servelet": "<id>" }) names a servelet: check runs
+let-servelet check on it and build adds servelets/<serviceId>/servelet.wasm and servelet.json
+to the bundle. Servelets are looked up in --servelets, then $LET_SERVELETS_DIR, then the
+servelets/ directory of the nearest ancestor. service start|status|stop has nothing to do for
+local services.
 publish needs a committed Genesis checkout, a semver package.json version and exact
 dependency versions. Raise versions with npm version <patch|minor|major> --no-git-tag-version.
 release needs a clean repository and never pushes; push the tag yourself.
@@ -74,13 +79,14 @@ async function main(args) {
       return ['create', await createApplet(one(positional, 'target directory'), options)];
     }
     case 'check': {
-      const { positional } = parse(args.slice(1), ['json']);
-      const { manifest, module, warnings, compat } = await checkApplet(one(positional, 'applet directory'));
-      return ['check', { appletId: manifest.id, compat, module, warnings }];
+      const { positional, options } = parse(args.slice(1), ['json', 'servelets']);
+      const { manifest, module, warnings, compat, local } = await checkApplet(one(positional, 'applet directory'), { servelets: options.servelets });
+      const servelets = local.map(({ serviceId, serveletId, bytes, sha256, checks }) => ({ serviceId, serveletId, bytes, sha256, checks }));
+      return ['check', { appletId: manifest.id, compat, module, servelets, warnings }];
     }
     case 'build': {
-      const { positional, options } = parse(args.slice(1), ['json', 'out', 'debug']);
-      return ['build', await buildApplet(one(positional, 'applet directory'), options.out, { debug: !!options.debug })];
+      const { positional, options } = parse(args.slice(1), ['json', 'out', 'debug', 'servelets']);
+      return ['build', await buildApplet(one(positional, 'applet directory'), options.out, { debug: !!options.debug, servelets: options.servelets })];
     }
     case 'dev': {
       const { positional, options } = parse(args.slice(2), ['json', ...DEVICE, ...(action === 'cookies' ? ['port'] : [])]);

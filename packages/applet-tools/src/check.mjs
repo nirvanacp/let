@@ -6,6 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
+import { checkServelet } from '@let/servelet-tools';
 import { containedFile, readApplet, requireValue, toolError } from './manifest.mjs';
 import { requireCompatible, TOOLS_TABLE } from './compat.mjs';
 
@@ -305,14 +306,33 @@ export function uiWarnings(files) {
 }
 
 /**
+ * Checks every local service: its servelet builds and passes its own checks. Background
+ * notification polling needs an address, so it cannot name a local service. Returns the servelet
+ * check results by service id.
+ */
+async function checkLocalServices(manifest, services) {
+  const local = services.filter(service => service.runtime === 'local');
+  const polled = manifest.capabilities.notifications?.service;
+  if (polled !== undefined && local.some(service => service.serviceId === polled)) {
+    throw toolError('NOTIFICATIONS_NEED_REMOTE', 'Background notification checks need a remote service; a local servelet runs only while Genesis runs.');
+  }
+  const results = [];
+  for (const service of local) {
+    try { results.push({ serviceId: service.serviceId, ...await checkServelet(service.directory) }); }
+    catch (error) { throw toolError(error.code ?? 'SERVELET_FAILED', `Servelet ${service.servelet} (service ${service.serviceId}): ${error.message}`); }
+  }
+  return results;
+}
+
+/**
  * Checks an applet: compatibility with these tools first, then the manifest and its `build`
  * section, the type check, and the page module named by `build.page`, which is bundled and
  * imported in Node and checked against the page module rules. Returns the applet with the
  * module's reader and command names (null without a page module) and the warnings.
  */
-export async function checkApplet(directory) {
+export async function checkApplet(directory, { servelets } = {}) {
   const compat = await requireCompatible(path.resolve(directory));
-  const applet = await readApplet(directory);
+  const applet = await readApplet(directory, { servelets });
   const { base, manifest, build: config } = applet;
   if (manifest.shell?.icon !== undefined) await checkIcon(base, manifest.shell.icon);
   typeCheck(base, config.check);
@@ -329,5 +349,6 @@ export async function checkApplet(directory) {
     await checkPageModuleFiles(base, files);
   }
   await bundlePageScript(base, config.page);
-  return { ...applet, module, warnings, compat: { applet: compat.applet, tools: TOOLS_TABLE } };
+  const local = await checkLocalServices(manifest, applet.services);
+  return { ...applet, module, warnings, local, compat: { applet: compat.applet, tools: TOOLS_TABLE } };
 }

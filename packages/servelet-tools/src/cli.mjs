@@ -1,15 +1,8 @@
 #!/usr/bin/env node
-// node:wasi warns that it is experimental each time it loads; the runner uses only its stable
-// preview1 import object, so the warning is dropped before the commands are imported.
-const emitWarning = process.emitWarning;
-process.emitWarning = (warning, ...rest) => {
-  if (String(warning?.message ?? warning).includes('WASI')) return;
-  emitWarning.call(process, warning, ...rest);
-};
-const { createServelet } = await import('./create.mjs');
-const { buildServelet } = await import('./build.mjs');
-const { checkServelet } = await import('./check.mjs');
-const { runServelet } = await import('./run.mjs');
+import { createServelet } from './create.mjs';
+import { buildServelet } from './build.mjs';
+import { checkServelet } from './check.mjs';
+import { runServelet } from './run.mjs';
 
 class UsageError extends Error { constructor(message) { super(message); this.code = 'USAGE'; } }
 

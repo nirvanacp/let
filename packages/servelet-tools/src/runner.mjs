@@ -1,5 +1,4 @@
 import { DatabaseSync } from 'node:sqlite';
-import { WASI } from 'node:wasi';
 import { inspectModule } from './build.mjs';
 import { toolError } from './locate.mjs';
 
@@ -10,6 +9,18 @@ import { toolError } from './locate.mjs';
 export const LIMITS = { requestBytes: 256 * 1024, responseBytes: 256 * 1024, sqlRows: 10_000, sqlReplyBytes: 4 * 1024 * 1024 };
 
 const encoder = new TextEncoder(), decoder = new TextDecoder();
+
+/**
+ * Loads node:wasi without its "experimental" warning: the runner uses only the stable preview1
+ * import object, and the warning would show on every check.
+ */
+async function loadWasi() {
+  const emitWarning = process.emitWarning;
+  process.emitWarning = (warning, ...rest) => {
+    if (!String(warning?.message ?? warning).includes('WASI')) emitWarning.call(process, warning, ...rest);
+  };
+  try { return (await import('node:wasi')).WASI; } finally { process.emitWarning = emitWarning; }
+}
 
 /** Parses JSON and keeps integers that have no fraction or exponent as BigInt, so int64 stays exact. */
 function parseArgs(text) {
@@ -88,6 +99,7 @@ export class ServeletRunner {
     runner.db = new DatabaseSync(database);
     runner.db.exec('PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 1000;');
     if (database !== ':memory:') runner.db.exec('PRAGMA journal_mode = WAL;');
+    const WASI = await loadWasi();
     const wasi = new WASI({ version: 'preview1', args: [], env: {}, preopens: {}, returnOnExit: false });
     let pending = new Uint8Array();
     const memory = () => new Uint8Array(runner.instance.exports.memory.buffer);

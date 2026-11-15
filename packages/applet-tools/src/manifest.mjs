@@ -2,7 +2,8 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { parseSourceManifest } from '@let/core';
+import { parseSourceManifest, validateServiceConfig } from '@let/core';
+import { locateServelet } from '@let/servelet-tools';
 
 export function toolError(code, message) { return Object.assign(new Error(message), { code }); }
 export function requireValue(condition, message) { if (!condition) throw toolError('INVALID_PACKAGE', message); }
@@ -23,22 +24,34 @@ export async function containedFile(base, name) {
 
 export const sha256 = bytes => createHash('sha256').update(bytes).digest('hex');
 
-function readService(value, file) {
-  const keys = ['serviceId', 'entry', 'healthPath', 'port', 'environment'];
-  requireValue(value && typeof value === 'object' && Object.keys(value).length === keys.length && keys.every(k => Object.hasOwn(value, k)), `${file} must have exactly ${keys.join(', ')}`);
-  requireValue(Number.isInteger(value.port) && value.port >= 1024 && value.port <= 65535, `${file}: port must be 1024-65535`);
-  requireValue(/^\/[a-z0-9/-]+$/.test(value.healthPath), `${file}: invalid healthPath`);
-  const environment = ['token', 'database', 'port', 'certificate', 'key'];
-  requireValue(value.environment && environment.every(k => /^[A-Z][A-Z0-9_]+$/.test(value.environment[k] ?? '')) && Object.keys(value.environment).length === environment.length, `${file}: environment must name ${environment.join(', ')}`);
-  return value;
+/**
+ * Reads one declared service config. A remote service (no `runtime`, or `"remote"`) keeps today's
+ * fields; a local one names a servelet, whose directory is looked up as `locateServelet` describes.
+ */
+async function readService(base, declaration, options) {
+  const file = declaration.config;
+  let json;
+  try { json = JSON.parse(await readFile(await containedFile(base, file), 'utf8')); }
+  catch (error) { throw error.code ? error : toolError('INVALID_PACKAGE', `Cannot read ${file}: ${error.message}`); }
+  const result = validateServiceConfig(json);
+  if ('errors' in result) throw toolError('INVALID_PACKAGE', `${file} is invalid:\n${result.errors.map(e => `  ${e.path || '/'}: ${e.message}`).join('\n')}`);
+  const service = result.value;
+  requireValue(service.serviceId === declaration.id, `${file}: serviceId must be ${declaration.id}`);
+  if (service.runtime === 'local') {
+    return { ...service, config: file, directory: await locateServelet(base, service.servelet, options) };
+  }
+  await containedFile(base, service.entry);
+  return { ...service, runtime: 'remote', config: file };
 }
 
 /**
  * Reads and validates `applet.json` with the schema rules in `@let/core`, splitting it into
- * the manifest the bundle carries and the `build` section only the tools use. Also loads the
- * service declaration `serviceFile`, or the first declared service's config when none is given.
+ * the manifest the bundle carries and the `build` section only the tools use. Also reads every
+ * declared service config into `services`. `service` is the one `serviceFile` names, or the first
+ * remote service when none is given, for the `service` command. `servelets` overrides the
+ * directory local servelets are looked up in.
  */
-export async function readApplet(directory, { serviceFile } = {}) {
+export async function readApplet(directory, { serviceFile, servelets } = {}) {
   const base = await realpath(directory);
   let json;
   try { json = JSON.parse(await readFile(path.join(base, 'applet.json'), 'utf8')); }
@@ -53,14 +66,11 @@ export async function readApplet(directory, { serviceFile } = {}) {
   }
   const { manifest, build } = parsed;
   const declared = manifest.capabilities.services ?? [];
-  const config = serviceFile ?? declared[0]?.config;
-  let service;
-  if (config) {
-    const declaration = declared.find(s => s.config === config);
-    requireValue(declaration, `${config} is not a declared service config`);
-    service = readService(JSON.parse(await readFile(await containedFile(base, config), 'utf8')), config);
-    requireValue(service.serviceId === declaration.id, `${config}: serviceId must be ${declaration.id}`);
-    await containedFile(base, service.entry);
-  }
-  return { base, manifest, build, service };
+  if (serviceFile !== undefined) requireValue(declared.some(s => s.config === serviceFile), `${serviceFile} is not a declared service config`);
+  const services = [];
+  for (const declaration of declared) services.push(await readService(base, declaration, { servelets }));
+  const service = serviceFile !== undefined
+    ? services.find(s => s.config === serviceFile)
+    : services.find(s => s.runtime === 'remote');
+  return { base, manifest, build, services, service };
 }

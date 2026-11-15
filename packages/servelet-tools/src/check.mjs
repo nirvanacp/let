@@ -37,7 +37,7 @@ export async function checkServelet(target) {
       }
     }
     if (failures.length) throw toolError('CHECK_FAILED', `${failures.length} of ${checks.length} checks failed:\n${failures.join('\n')}`);
-    return { serveletId: build.serveletId, bytes: build.bytes, sha256: build.sha256, health: health.body, checks: checks.length };
+    return { serveletId: build.serveletId, declaration: build.declaration, wasm: build.wasm, bytes: build.bytes, sha256: build.sha256, health: health.body, checks: checks.length };
   } finally {
     runner.close();
   }
