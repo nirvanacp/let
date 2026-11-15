@@ -26,6 +26,8 @@ Write a short brief in `.specs/current.md`:
 - The design reference and any explicit overrides.
 - Exclusions the user approved, assumptions you made, and open questions.
 
+After deriving the journeys, decide the store for each record type with [services and data](services-and-data.md#choosing-the-store). When one needs a servelet, build it first with the [servelet build skill](../../servelets/skills/let-build-servelet/SKILL.md) and build the UI against its route table.
+
 Mark each requirement `required`, `preserve` or `deferred by user`, and track its status as `planned`, `implemented`, `verified`, `failed` or `blocked` with evidence. Your inability to check something does not make it an exclusion.
 
 | Journey | Expected result | Owner and data | Status |

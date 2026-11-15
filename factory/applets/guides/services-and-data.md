@@ -1,6 +1,6 @@
 # Services and data
 
-An applet keeps its own data in Genesis document storage, in its own HTTPS service, or both. The website keeps its own data. Decide which store owns each record type and write it in `.specs/current.md`.
+An applet keeps its own data in Genesis document storage, in a local servelet, in its own HTTPS service, or a mix. The website keeps its own data. Decide which store owns each record type and write it in `.specs/current.md`.
 
 ## Website sign-in
 
@@ -11,6 +11,7 @@ By default every applet shares one website sign-in with the others: signing in t
 | Need | Store |
 | --- | --- |
 | Data on this device only: categories, notes, read state, preferences | Document storage (`capabilities.storage: true`) |
+| Data the app owns that needs queries or rules, on this device | A local servelet ([servelet guidance](../../servelets/AGENTS.md)) |
 | Data shared across devices or with other tools, or computed on a server | A declared service |
 | Data the website already keeps (its bookmarks, votes, follows) | The website, through watches, page inputs and page module commands |
 
@@ -42,10 +43,18 @@ await commit({
 ## Declaring a service
 
 ```json
-"capabilities": { "services": [{ "id": "bookmarks", "config": "backend/service.json" }] }
+"capabilities": { "services": [{ "id": "bookmarks", "config": "service.json" }] }
 ```
 
-`backend/service.json` describes the backend for the tools:
+The config file has two shapes. A local servelet names the servelet that runs on the phone:
+
+```json
+{ "serviceId": "bookmarks", "runtime": "local", "servelet": "bookmarks-store" }
+```
+
+`build` compiles the servelet into the bundle, and the host answers its requests with no address, token or connection step. Build and change the servelet with the [servelet guidance](../../servelets/AGENTS.md); its README is the route table the applet calls. A local servelet cannot drive background notifications.
+
+A remote service is a backend on a server. Its config, by convention `backend/service.json`, describes it for the tools:
 
 ```json
 {
@@ -65,12 +74,13 @@ await commit({
 
 The backend is a Node HTTPS server. It requires `Authorization: Bearer <token>` on every request, answers `GET <healthPath>` with status 200 and `{ "ready": true }`, accepts and returns JSON bodies up to 256 KiB, and does not redirect. The `environment` map names the variables through which it receives its token, database path, port and TLS certificate and key.
 
-The UI calls it with `genesis.services.request("bookmarks", path, { method, body })`, or `useService("bookmarks")` in React. The shell adds the credential, which it keeps in the Android Keystore; the UI and the bundle never see it. Tokens, certificates and server addresses never go into the applet's files, records or bundle.
+The UI calls either kind with `genesis.services.request("bookmarks", path, { method, body })`, or `useService("bookmarks")` in React. For a remote service the shell adds the credential, which it keeps in the Android Keystore; the UI and the bundle never see it. Tokens, certificates and server addresses never go into the applet's files, records or bundle.
 
 ## Handling service failures
 
 - A 4xx or 5xx status is a response: read its body and show a specific message. The exceptions are 401 and 403, which the shell turns into `ServiceError` with `AUTHENTICATION_FAILED`.
 - `ServiceError` means the shell could not complete the request. `CONFIGURATION_REQUIRED` means the user has not connected the service yet; tell them to use Service connections in the Genesis menu. Use `serviceMessage(error)` for the others.
+- A local servelet never answers `CONFIGURATION_REQUIRED` or `AUTHENTICATION_FAILED`, and its 401 and 403 are ordinary responses. `SERVICE_FAILURE` means the servelet could not run; its message names the reason.
 - After `DEADLINE` or `SERVICE_UNREACHABLE` on a write, the write may have happened. Reread before offering to retry, or make the write idempotent with a client-generated id.
 - A failed read is not an empty collection. Keep showing the last good data with a failure notice.
 - Reread service data when the app resumes (`useAppResume` in React).
@@ -113,7 +123,7 @@ if (request.method === "GET" && url.pathname === "/v1/notifications") {
 
 ## Local startup and ports
 
-Coding agents do not start, stop or provision backends unless the user asks. Maintain the commands so the user can:
+This section applies to remote services; a local servelet has nothing to start. Coding agents do not start, stop or provision backends unless the user asks. Maintain the commands so the user can:
 
 ```sh
 npx genesis-applet service start . --local                      # local process and health check

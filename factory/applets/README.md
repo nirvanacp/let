@@ -31,6 +31,7 @@ Example request to an agent:
 | Lay out an applet's code and screens | [Patterns](guides/patterns.md) |
 | Match the source product's mobile design | [Design](guides/design.md) |
 | Store records or connect a backend | [Services and data](guides/services-and-data.md) |
+| Give the app its own backend on the phone, with a database | [Servelets](../servelets/README.md) |
 | Check and debug the result | [Verification](guides/verification.md) |
 | Sign in to test accounts during checks | [Test accounts skill](skills/genesis-test-accounts/SKILL.md) |
 | Keep applet specs and change records | [Applet records](guides/applet-records.md) |
