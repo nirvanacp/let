@@ -1,0 +1,10 @@
+{
+  "servelet": 1,
+  "id": "__ID__",
+  "name": "__NAME__",
+  "language": "go",
+  "framework": "__FRAMEWORK__",
+  "runtime": "local",
+  "engine": "wasm",
+  "healthPath": "/health"
+}

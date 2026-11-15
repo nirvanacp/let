@@ -1,0 +1,13 @@
+[
+  { "method": "GET", "path": "/health", "expectStatus": 200 },
+  { "method": "POST", "path": "/v1/notes", "body": { "id": "n1", "title": "First", "body": "Hello" }, "expectStatus": 201 },
+  { "method": "POST", "path": "/v1/notes", "body": { "id": "n1", "title": "First", "body": "Hello" }, "expectStatus": 200 },
+  { "method": "POST", "path": "/v1/notes", "body": { "id": "n1", "title": "Other", "body": "" }, "expectStatus": 409 },
+  { "method": "GET", "path": "/v1/notes/n1", "expectStatus": 200 },
+  { "method": "PUT", "path": "/v1/notes/n1", "body": { "title": "Renamed", "body": "Hello", "revision": 1 }, "expectStatus": 200 },
+  { "method": "PUT", "path": "/v1/notes/n1", "body": { "title": "Stale", "body": "", "revision": 1 }, "expectStatus": 409 },
+  { "method": "GET", "path": "/v1/notes?limit=10", "expectStatus": 200 },
+  { "method": "POST", "path": "/v1/notes", "body": { "id": "n2", "title": "" }, "expectStatus": 400 },
+  { "method": "DELETE", "path": "/v1/notes/n1?revision=2", "expectStatus": 204 },
+  { "method": "GET", "path": "/v1/notes/n1", "expectStatus": 404 }
+]
