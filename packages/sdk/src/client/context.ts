@@ -245,6 +245,8 @@ interface WatchEntry {
   lastResync: number;
   /** A resync that came within `RESYNC_GAP_MS` of the last one, sent when the gap is over. */
   resyncTimer: ReturnType<typeof setTimeout> | null;
+  /** The last reference closed in this task; the page hears of it unless the watch opens again first. */
+  closing: boolean;
 }
 
 export function createContext(id: string, startUrl: string, session: Session): ContextControl {
@@ -493,6 +495,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
   // ---- Watches ----------------------------------------------------------------------------------
 
   const watches = new Map<string, WatchEntry>();
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
   function openWatch(entry: WatchEntry) {
     if (!state.bound || entry.refs === 0) return;
@@ -530,12 +533,16 @@ export function createContext(id: string, startUrl: string, session: Session): C
     validateReadSpec(spec, "spec");
     if (options.when) validateGuards(options.when, "when");
     const specJson = JSON.stringify([spec, options.when ?? null]);
+    // Another specification under a closing id: the page closes the old watch before it opens the new one.
+    if (watches.get(watchId)?.closing && watches.get(watchId)!.specJson !== specJson) closeWatches();
     const existing = watches.get(watchId);
     if (existing && (existing.refs > 0 || existing.specJson === specJson)) {
       if (existing.specJson !== specJson) throw new GenesisError("CONFLICT", `The watch ${watchId} is open with another specification`);
       if (existing.refs++ === 0) {
         // Opened again: its kept copy shows at once, marked stale, until the page sends a snapshot.
-        existing.store.reopened();
+        // A screen change that closed it in this same task never closed the page's watch, so its data is current.
+        if (!existing.closing) existing.store.reopened();
+        existing.closing = false;
         openWatch(existing);
       }
       return existing.handle;
@@ -543,7 +550,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
-      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null,
+      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null, closing: false,
       handle: {
         id: watchId,
         get: store.get,
@@ -551,20 +558,33 @@ export function createContext(id: string, startUrl: string, session: Session): C
         resync: () => resyncWatch(entry, true),
         close() {
           if (entry.refs === 0 || --entry.refs > 0) return;
-          if (entry.openIn !== null && entry.openIn === state.generation && state.bound) send("watch.close", { id: watchId }).catch(() => {});
-          entry.openIn = null;
-          if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
-          entry.resyncTimer = null;
-          // The closed watch stays, following navigations, so its history copies outlive the screen.
-          watches.delete(watchId);
-          watches.set(watchId, entry);
-          dropClosedWatches();
+          // The page hears of it after this task, so a screen that opens the same watch keeps it.
+          entry.closing = true;
+          closeTimer ??= setTimeout(closeWatches, 0);
         },
       },
     };
     watches.set(watchId, entry);
     openWatch(entry);
     return entry.handle;
+  }
+
+  /** Closes, in the page too, every watch whose last reference closed and that no one opened again. */
+  function closeWatches() {
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = null;
+    for (const entry of [...watches.values()]) {
+      if (!entry.closing) continue;
+      entry.closing = false;
+      if (entry.openIn !== null && entry.openIn === state.generation && state.bound) send("watch.close", { id: entry.id }).catch(() => {});
+      entry.openIn = null;
+      if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
+      entry.resyncTimer = null;
+      // The closed watch stays, following navigations, so its history copies outlive the screen.
+      watches.delete(entry.id);
+      watches.set(entry.id, entry);
+    }
+    dropClosedWatches();
   }
 
   /** Keeps at most `CLOSED_WATCHES_MAX` closed watches, dropping the ones closed longest ago. */
