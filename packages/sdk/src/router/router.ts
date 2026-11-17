@@ -143,6 +143,8 @@ interface Tracked {
   sent: string;
   status: RouteStatus | null;
   gone: boolean;
+  /** Releases the hold that keeps the page awake while the user waits for it to load. */
+  hold: (() => void) | null;
 }
 
 /**
@@ -216,6 +218,7 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
     const rest = result.effects.filter(effect => !run(effect));
     show();
     if (changed) genesis.save({ router: serialize(state).state });
+    if (changed) holdLoading();
     if (changed || pendingChanged) notify();
     return rest;
   }
@@ -430,6 +433,21 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
   /** The account the latest report named: its value as JSON, `false` when signed out, undefined until known. */
   let account: string | false | undefined;
 
+  /**
+   * Holds the active context awake while its route loads within its deadline, so a page the user
+   * waits for runs at full speed. Every other context runs as much as Genesis decides.
+   */
+  function holdLoading() {
+    for (const [id, entry] of tracked) {
+      const wanted = id === state.active && entry.status?.status === "loading" && state.contexts[id]?.page.expired === false;
+      if (wanted && !entry.hold) entry.hold = genesis.context(id).hold("awake");
+      if (!wanted && entry.hold) {
+        entry.hold();
+        entry.hold = null;
+      }
+    }
+  }
+
   /** Keeps the `ready` watch of the context's current route open, and reports the context's status. */
   function update(id: string) {
     if (destroyed) return;
@@ -458,6 +476,7 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
       entry.status = status;
       notify();
     }
+    holdLoading();
 
     const gone = context.state.error !== null && !context.state.bound;
     if (gone && !entry.gone) {
@@ -550,7 +569,7 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
 
   for (const id of contextIds) {
     const context = genesis.context(id);
-    const entry: Tracked = { routeId: null, ready: null, stopReady: null, account: null, sent: "", status: null, gone: false };
+    const entry: Tracked = { routeId: null, ready: null, stopReady: null, account: null, sent: "", status: null, gone: false, hold: null };
     tracked.set(id, entry);
     if (options.account) {
       entry.account = context.watch(ACCOUNT_WATCH, options.account.signedIn);
@@ -622,6 +641,8 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
         entry.stopReady?.();
         entry.ready?.close();
         entry.account?.close();
+        entry.hold?.();
+        entry.hold = null;
       }
       listeners.clear();
     },

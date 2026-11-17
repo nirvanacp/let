@@ -12,7 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
-import type { ActionResult, FilesPick, GrantKind, GrantResult, Locator, ReadSpec } from "@let/core";
+import type { ActionResult, ActivityLevel, FilesPick, GrantKind, GrantResult, Locator, ReadSpec } from "@let/core";
 import type { PickedFile } from "./client/actions.js";
 import type { ContextHandle, ContextState, Expect, PendingInput, Watch, WatchOptions } from "./client/context.js";
 import { connect, type ConnectOptions, type Genesis } from "./client/session.js";
@@ -351,6 +351,16 @@ export function useGrant(contextId?: string): { grant: GrantKind | null; allow(k
     return result;
   }, [handle]);
   return { grant, allow };
+}
+
+/**
+ * Keeps a covered website running while `active` is true (see `ContextHandle.hold`), for work the
+ * page does on its own, such as playing music. The level is "running" unless `options.level` says "awake".
+ */
+export function useHold(active: boolean, options: { context?: string; level?: ActivityLevel } = {}): void {
+  const handle = useContextHandle(options.context);
+  const level = options.level ?? "running";
+  useEffect(() => (active ? handle.hold(level) : undefined), [handle, active, level]);
 }
 
 /** `post(input)` notifies the user; see `Genesis["notifications"]`. */

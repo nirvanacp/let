@@ -1,4 +1,5 @@
 import {
+  type ActivityLevel,
   matchesGuard,
   validateGuards,
   validateReadSpec,
@@ -164,6 +165,14 @@ export interface ContextHandle {
   onGrantEnded(listener: (ended: GrantEnded) => void): () => void;
 
   /**
+   * Asks Genesis to keep this covered website running: "running" keeps scripts and media going
+   * without drawing; "awake" is full speed for at most 30 s. Returns the release function. Calls
+   * and inputs wake the page by themselves; hold only for work the page does on its own.
+   * Does nothing without `limits.activity`.
+   */
+  hold(level?: ActivityLevel): () => void;
+
+  /**
    * Opens a watch. The same `id` with an equal specification returns the same watch; another
    * specification throws `CONFLICT` while the watch is open. A closed watch keeps its copies of
    * this context's history entries, so opening it again shows them at once, marked stale.
@@ -207,6 +216,8 @@ const RETRY = new Set(["CONTEXT_REPLACED", "NOT_READY"]);
 const RESYNC_GAP_MS = 1000;
 /** Closed watches kept per context for their history copies; the oldest closed one goes first. */
 const CLOSED_WATCHES_MAX = 32;
+/** How long the host keeps an "awake" hold at full speed before it counts as "running". */
+const HOLD_AWAKE_MAX_MS = 30_000;
 
 interface InputRecord {
   key: string;
@@ -441,6 +452,44 @@ export function createContext(id: string, startUrl: string, session: Session): C
     return input(op, args, rest);
   };
 
+  // ---- Holds ------------------------------------------------------------------------------------
+
+  const holds: Record<ActivityLevel, number> = { running: 0, awake: 0 };
+  /** The level last sent to the host. */
+  let held: ActivityLevel | null = null;
+  /** Ends the awake holds' full speed when the host does, so both agree on the level. */
+  let awakeTimer: ReturnType<typeof setTimeout> | null = null;
+  let awakeSpent = false;
+
+  function sendHold() {
+    const level = holds.awake > 0 && !awakeSpent ? "awake" : holds.awake + holds.running > 0 ? "running" : null;
+    if (level === held) return;
+    held = level;
+    // A hold is advice: a failed send changes nothing the applet can act on.
+    session.request("context.hold", { id, level }).catch(() => {});
+  }
+
+  function hold(level: ActivityLevel = "running"): () => void {
+    if (!limits.activity) return () => {};
+    if (level === "awake" && holds.awake === 0) {
+      awakeSpent = false;
+      awakeTimer = setTimeout(() => { awakeTimer = null; awakeSpent = true; sendHold(); }, HOLD_AWAKE_MAX_MS);
+    }
+    holds[level]++;
+    sendHold();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      holds[level]--;
+      if (level === "awake" && holds.awake === 0 && awakeTimer) {
+        clearTimeout(awakeTimer);
+        awakeTimer = null;
+      }
+      sendHold();
+    };
+  }
+
   // ---- Watches ----------------------------------------------------------------------------------
 
   const watches = new Map<string, WatchEntry>();
@@ -634,6 +683,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
       grantListeners.add(listener);
       return () => { grantListeners.delete(listener); };
     },
+
+    hold,
 
     watch: watch as ContextHandle["watch"],
     resync: resyncAll,
