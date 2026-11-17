@@ -38,6 +38,8 @@ export interface Limits {
   userActions?: boolean;
   /** The foreground can let a hidden page use one website feature once (`context.grant`). Absent in an older Genesis. */
   grants?: boolean;
+  /** The host rests covered contexts and takes `context.hold`. Absent in an older Genesis. */
+  activity?: boolean;
   /** Input page calls one context takes at once before `RATE_LIMITED`. Absent in an older Genesis, which has no limit. */
   inputBurst?: number;
   /** Milliseconds for one input call of the burst to come back. */
@@ -134,7 +136,7 @@ export type ForegroundMethod =
   | "session.save"
   | "back.handled" | "back.leave"
   | "page.call" | "page.cancel"
-  | "context.grant"
+  | "context.grant" | "context.hold"
   | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable";
 export type ContextMethod = "page.result" | "page.progress" | "page.emit" | "page.input" | "page.files" | "page.share";
 export type Method = ForegroundMethod | ContextMethod;
@@ -245,6 +247,15 @@ export type GrantKind = "fullscreen" | "download" | "window" | "handoff" | "loca
 export interface ContextGrant {
   id: string;
   grant: GrantKind;
+}
+
+/** How much of a covered website an applet's hold keeps going: scripts and media, or everything. */
+export type ActivityLevel = "running" | "awake";
+
+/** Params of `context.hold`. `level` null releases the hold. */
+export interface ContextHoldParams {
+  id: string;
+  level: ActivityLevel | null;
 }
 
 /** Result of `context.grant`. `expiresInMs` is 0 for a revealed context, which needs no grant. */

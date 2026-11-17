@@ -40,6 +40,10 @@ There are no 401 or 403 answers: the host is the only caller and adds no credent
 - Page by key, not by offset: `?after=<last key>&limit=<n>`, with a default and a maximum limit, ordered by the key or an indexed column with the key as tie breaker. Answer the next key, or an empty value at the end.
 - Return the fields the applet shows; leave out large fields from lists.
 
+## Cost
+
+A servelet runs only during a request, on one worker thread, through an interpreter, so each request costs more than native code would and requests wait for each other. Answer a screen in one request instead of several, page large lists, index every column a query filters or sorts by, and never have the applet poll.
+
 ## What stays out
 
 - No secrets, tokens or addresses in source or `servelet.json`. A servelet has no network to use them on.

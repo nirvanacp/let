@@ -83,4 +83,10 @@ Wrap storage and service calls in one module, `src/library.ts`, that screens cal
 
 ## Performance
 
-Bound list sizes in the readers' selectors; a page is at most 192 KiB of JSON. Memoize rows by key. Keep images lazy and sized. Do not poll; records arrive when the page changes.
+A covered website rests unless the applet is using it: Genesis pauses its drawing and timers, and every call, input and navigation wakes it first (see [how a covered page runs](page-control.md#how-a-covered-page-runs)). The applet's part is to leave it resting:
+
+- Never keep a page busy to "keep it warm". Do not poll with `read`, and do not run a timer that calls the page; records arrive through watches when the page changes.
+- Bound every list in the reader's selector and with `limit`; a page is at most 192 KiB of JSON. Render a long list with windowing or in pages, not all at once.
+- Memoize rows by key, and select a single record with `useRecord` so that one change re-renders one row.
+- Keep images lazy and sized.
+- Hold a page (`useHold`) only for work it does alone, such as playing music, and release the hold when that work ends.

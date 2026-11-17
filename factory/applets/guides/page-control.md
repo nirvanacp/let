@@ -152,6 +152,22 @@ The client keeps the last ready copy of each watch per history entry, for up to 
 
 After the applet comes back from the background, every watch asks for a fresh snapshot. When a patch arrives out of order, the client asks for one too.
 
+### How a covered page runs
+
+A website the applet covers does not need to draw, so Genesis runs it at one of three levels, where `limits.activity` is true:
+
+| Level | The page | When |
+| --- | --- | --- |
+| Awake | Runs at full speed | While it loads, during a call, an input or a navigation and for a few seconds after, during a one-time grant, and while the website is shown |
+| Running | Scripts, timers and media run; nothing is drawn | While the applet holds it with `context.hold()` |
+| Resting | Timers and drawing are paused; the network and the page's state stay | The rest of the time |
+
+- Every call, input and navigation wakes the page first, so an action works on the first tap. Nothing in the applet has to wake a page.
+- A watch on a resting page still delivers the changes the website makes, up to about a second late.
+- Contexts start one after another, the one on screen first (see [navigation](navigation.md#contexts-start-one-after-another)). A call to a context that has not started starts it at once.
+- Page module code must not depend on `requestAnimationFrame`, `IntersectionObserver`, `document.hidden` or short timers outside a call: a resting page does not run them on time.
+- For work the page does alone, such as playing music, hold it: `const release = context.hold()` keeps it running until `release()`, and `useHold(active)` does the same from a component. `hold("awake")` is full speed for at most 30 seconds. See the [SDK reference](sdk-reference.md#holds).
+
 ### Virtualized lists
 
 Some websites keep only the visible rows in the DOM. Mark such a list `virtualized: true`: records whose elements leave the DOM stay in the list with `present: false` in their data, so the list grows as the user scrolls the website instead of losing rows. A record with `present: false` cannot be the target of input until it is back on the page; scroll it into view first.

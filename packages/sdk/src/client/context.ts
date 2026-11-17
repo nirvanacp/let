@@ -1,4 +1,5 @@
 import {
+  type ActivityLevel,
   matchesGuard,
   validateGuards,
   validateReadSpec,
@@ -164,6 +165,14 @@ export interface ContextHandle {
   onGrantEnded(listener: (ended: GrantEnded) => void): () => void;
 
   /**
+   * Asks Genesis to keep this covered website running: "running" keeps scripts and media going
+   * without drawing; "awake" is full speed for at most 30 s. Returns the release function. Calls
+   * and inputs wake the page by themselves; hold only for work the page does on its own.
+   * Does nothing without `limits.activity`.
+   */
+  hold(level?: ActivityLevel): () => void;
+
+  /**
    * Opens a watch. The same `id` with an equal specification returns the same watch; another
    * specification throws `CONFLICT` while the watch is open. A closed watch keeps its copies of
    * this context's history entries, so opening it again shows them at once, marked stale.
@@ -207,6 +216,8 @@ const RETRY = new Set(["CONTEXT_REPLACED", "NOT_READY"]);
 const RESYNC_GAP_MS = 1000;
 /** Closed watches kept per context for their history copies; the oldest closed one goes first. */
 const CLOSED_WATCHES_MAX = 32;
+/** How long the host keeps an "awake" hold at full speed before it counts as "running". */
+const HOLD_AWAKE_MAX_MS = 30_000;
 
 interface InputRecord {
   key: string;
@@ -234,6 +245,8 @@ interface WatchEntry {
   lastResync: number;
   /** A resync that came within `RESYNC_GAP_MS` of the last one, sent when the gap is over. */
   resyncTimer: ReturnType<typeof setTimeout> | null;
+  /** The last reference closed in this task; the page hears of it unless the watch opens again first. */
+  closing: boolean;
 }
 
 export function createContext(id: string, startUrl: string, session: Session): ContextControl {
@@ -441,9 +454,48 @@ export function createContext(id: string, startUrl: string, session: Session): C
     return input(op, args, rest);
   };
 
+  // ---- Holds ------------------------------------------------------------------------------------
+
+  const holds: Record<ActivityLevel, number> = { running: 0, awake: 0 };
+  /** The level last sent to the host. */
+  let held: ActivityLevel | null = null;
+  /** Ends the awake holds' full speed when the host does, so both agree on the level. */
+  let awakeTimer: ReturnType<typeof setTimeout> | null = null;
+  let awakeSpent = false;
+
+  function sendHold() {
+    const level = holds.awake > 0 && !awakeSpent ? "awake" : holds.awake + holds.running > 0 ? "running" : null;
+    if (level === held) return;
+    held = level;
+    // A hold is advice: a failed send changes nothing the applet can act on.
+    session.request("context.hold", { id, level }).catch(() => {});
+  }
+
+  function hold(level: ActivityLevel = "running"): () => void {
+    if (!limits.activity) return () => {};
+    if (level === "awake" && holds.awake === 0) {
+      awakeSpent = false;
+      awakeTimer = setTimeout(() => { awakeTimer = null; awakeSpent = true; sendHold(); }, HOLD_AWAKE_MAX_MS);
+    }
+    holds[level]++;
+    sendHold();
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      holds[level]--;
+      if (level === "awake" && holds.awake === 0 && awakeTimer) {
+        clearTimeout(awakeTimer);
+        awakeTimer = null;
+      }
+      sendHold();
+    };
+  }
+
   // ---- Watches ----------------------------------------------------------------------------------
 
   const watches = new Map<string, WatchEntry>();
+  let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
   function openWatch(entry: WatchEntry) {
     if (!state.bound || entry.refs === 0) return;
@@ -481,12 +533,16 @@ export function createContext(id: string, startUrl: string, session: Session): C
     validateReadSpec(spec, "spec");
     if (options.when) validateGuards(options.when, "when");
     const specJson = JSON.stringify([spec, options.when ?? null]);
+    // Another specification under a closing id: the page closes the old watch before it opens the new one.
+    if (watches.get(watchId)?.closing && watches.get(watchId)!.specJson !== specJson) closeWatches();
     const existing = watches.get(watchId);
     if (existing && (existing.refs > 0 || existing.specJson === specJson)) {
       if (existing.specJson !== specJson) throw new GenesisError("CONFLICT", `The watch ${watchId} is open with another specification`);
       if (existing.refs++ === 0) {
         // Opened again: its kept copy shows at once, marked stale, until the page sends a snapshot.
-        existing.store.reopened();
+        // A screen change that closed it in this same task never closed the page's watch, so its data is current.
+        if (!existing.closing) existing.store.reopened();
+        existing.closing = false;
         openWatch(existing);
       }
       return existing.handle;
@@ -494,7 +550,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
-      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null,
+      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null, closing: false,
       handle: {
         id: watchId,
         get: store.get,
@@ -502,20 +558,33 @@ export function createContext(id: string, startUrl: string, session: Session): C
         resync: () => resyncWatch(entry, true),
         close() {
           if (entry.refs === 0 || --entry.refs > 0) return;
-          if (entry.openIn !== null && entry.openIn === state.generation && state.bound) send("watch.close", { id: watchId }).catch(() => {});
-          entry.openIn = null;
-          if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
-          entry.resyncTimer = null;
-          // The closed watch stays, following navigations, so its history copies outlive the screen.
-          watches.delete(watchId);
-          watches.set(watchId, entry);
-          dropClosedWatches();
+          // The page hears of it after this task, so a screen that opens the same watch keeps it.
+          entry.closing = true;
+          closeTimer ??= setTimeout(closeWatches, 0);
         },
       },
     };
     watches.set(watchId, entry);
     openWatch(entry);
     return entry.handle;
+  }
+
+  /** Closes, in the page too, every watch whose last reference closed and that no one opened again. */
+  function closeWatches() {
+    if (closeTimer) clearTimeout(closeTimer);
+    closeTimer = null;
+    for (const entry of [...watches.values()]) {
+      if (!entry.closing) continue;
+      entry.closing = false;
+      if (entry.openIn !== null && entry.openIn === state.generation && state.bound) send("watch.close", { id: entry.id }).catch(() => {});
+      entry.openIn = null;
+      if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
+      entry.resyncTimer = null;
+      // The closed watch stays, following navigations, so its history copies outlive the screen.
+      watches.delete(entry.id);
+      watches.set(entry.id, entry);
+    }
+    dropClosedWatches();
   }
 
   /** Keeps at most `CLOSED_WATCHES_MAX` closed watches, dropping the ones closed longest ago. */
@@ -634,6 +703,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
       grantListeners.add(listener);
       return () => { grantListeners.delete(listener); };
     },
+
+    hold,
 
     watch: watch as ContextHandle["watch"],
     resync: resyncAll,

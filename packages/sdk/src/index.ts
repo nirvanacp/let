@@ -30,6 +30,7 @@ export type { ServiceResponse, Storage, StorageBatch, StorageChange, StorageKey,
 export type {
   ActionOutcome,
   ActionResult,
+  ActivityLevel,
   AttachVia,
   CallDetails,
   DownloadSave,

@@ -118,6 +118,7 @@ genesis.ready();
 | Pending | `pending(target?)`, `subscribePending(listener)`, `cancel()` |
 | Watches | `watch(id, spec, { when? })`, `resync()`, `forget({ current?, keepInputs? })` |
 | Grants | `allow(grant): Promise<GrantResult>`, `onGrantEnded(listener)`; see [User actions](#user-actions) |
+| Holds | `hold(level?: ActivityLevel): () => void`; see [Holds](#holds) |
 | Raw | `call(op, args?, options?)` sends one page agent operation as is. |
 
 `resync()` asks every open watch of the context for a fresh snapshot. `forget()` drops the copies the watches kept of earlier history entries, so none shows after the account changed; with `current: true` it also clears the data shown now. It settles the context's pending inputs as `unknown` with `CONTEXT_REPLACED`, unless `keepInputs` is true. The router calls both when the account changes.
@@ -204,6 +205,7 @@ A locator's `options` take the other locator fields `within`, `has`, `nth`, `fra
 | `AttachVia` | `"input" \| "drop" \| "paste"`, how `attachFiles` hands files to the page. |
 | `GrantKind` | `"fullscreen" \| "download" \| "window" \| "handoff" \| "location"`, the website feature a one-time grant allows. |
 | `GrantResult` | `{ granted: true, expiresInMs }`, what `context.allow` resolves with; `expiresInMs` is 0 for a revealed context, which needs no grant. |
+| `ActivityLevel` | `"running" \| "awake"`, the level a hold keeps a covered website at. |
 | `GrantEnded` | `{ id, grant, used }`, what `onGrantEnded` hears: `used` when the page used the grant, otherwise it expired or a navigation, reveal, cover or popup cleared it. |
 
 ### Errors
@@ -319,6 +321,7 @@ router.subscribe(() => console.log(router.screen()?.id, router.status().status))
 | `useNotifications` | `useNotifications(): Notifications` | `genesis.notifications`. |
 | `useFilePicker` | `useFilePicker(): { files, pick, remove, clear }` | Picked files held while the component is mounted, released when it unmounts. `pick(options?)` adds to `files` with `multiple` and replaces them without. |
 | `useGrant` | `useGrant(contextId?): { grant, allow(kind) }` | One-time grants of a context, the active context by default: `grant` is the `GrantKind` the hidden page may use now, or `null` once it ended. |
+| `useHold` | `useHold(active, { context?, level? }): void` | Holds a context's covered website while `active` is true, the active context and `"running"` by default; see [Holds](#holds). |
 | `useScrollMemory` | `useScrollMemory()` | A ref callback that keeps a scroll container's position per screen. |
 | `ScrollMemory` | `<ScrollMemory {...divProps}>` | A `div` with `useScrollMemory`. |
 | `useAppResume` | `useAppResume(callback)` | Runs on resume from the background and, with the router, after Done on the website. |
@@ -401,6 +404,26 @@ return <>
 - `notifications.enable()` asks Android for permission to notify when needed and turns the applet's notifications on; it resolves with whether they are on.
 - `context.allow(grant)` lets the context's hidden page use one website feature once within 5 seconds: `fullscreen`, `download`, `window`, `handoff` or `location`. It resolves with `{ granted: true, expiresInMs }`, where `expiresInMs` is 0 for a revealed context, which needs no grant. `context.onGrantEnded(listener)` hears `{ id, grant, used }` when the grant is used, expires or is cleared by a navigation, a reveal, a cover or a window. It needs `limits.grants` and rejects with `UNKNOWN_METHOD` without it. See [One-time grants](interactions.md#one-time-grants).
 
+### Holds
+
+A covered website rests while the applet is not using it, and every call, input and navigation wakes it ([how a covered page runs](page-control.md#how-a-covered-page-runs)). A hold is for work the page does alone:
+
+- `context.hold(level?)` asks Genesis to keep the context's covered website going and returns the release function. `"running"`, the default, keeps scripts, timers and media going without drawing, for as long as the hold lasts. `"awake"` is full speed for at most 30 seconds, after which the page falls back to its other holds.
+- Holds are counted: the page stays at the highest level any unreleased hold asks for. Releasing twice does nothing. A new UI document starts with no holds.
+- `useHold(active, { context?, level? })` holds while `active` is true and the component is mounted.
+- It needs `limits.activity`. Without it, in an older Genesis where a covered website always runs, `hold` does nothing and returns a release function that does nothing.
+
+Hold while a watch says the page is working, and no longer:
+
+```tsx
+function PlaybackHold() {
+  // `playingSpec` reads true while the site's player plays.
+  const playing = useWatch("playing", playingSpec, { context: "primary" });
+  useHold(playing.value === true, { context: "primary" });
+  return null;
+}
+```
+
 ## Errors and limits
 
 `ErrorCode` is one of `RETIRED`, `CONFLICT`, `NOT_FOUND`, `DOCUMENT_TOO_LARGE`, `STORAGE_FAILURE`, `ORIGIN_NOT_DECLARED`, `MESSAGE_TOO_LARGE`, `PAGE_TOO_LARGE`, `PATCH_TOO_LARGE`, `DEADLINE`, `INVALID_STEPS`, `SERVICE_UNREACHABLE`, `SERVICE_FAILURE`, `AUTHENTICATION_FAILED`, `CERTIFICATE_FAILED`, `CONFIGURATION_REQUIRED`, `NOT_READY`, `UNKNOWN_METHOD`, `INVALID_ARGUMENT`, `QUOTA_EXCEEDED`, `PROTOCOL_MISMATCH`, `APPLET_INCOMPATIBLE`, `ENVELOPE_INVALID`, `CONTEXT_REPLACED`, `TARGET_NOT_FOUND`, `PRECONDITION_FAILED`, `ASYNC_READ`, `AUTH_REQUIRED`, `REJECTED`, `NOT_ACTIONABLE`, `AMBIGUOUS_TARGET`, `PROTECTED_FIELD`, `INPUT_UNAVAILABLE`, `UNKNOWN_OPERATION`, `USER_ACTION_REQUIRED`, `FILE_UNAVAILABLE` and `RATE_LIMITED`. Action results carry the same codes in `code`. The [protocol guide](protocol.md) says when each one occurs.
@@ -424,6 +447,7 @@ return <>
 | Input calls per context | `inputBurst`, `inputRefillMs` | 20 at once, then one more per second; over it an input is `failed` with `RATE_LIMITED` |
 | Trusted input | `trustedInput` | `true` where the shell can send real input |
 | One-time grants | `grants` | `true` where `context.allow` works; a grant lasts 5 s and is used once |
+| Context activity | `activity` | `true` where a covered website rests while unused and `context.hold` works; an `awake` hold lasts at most 30 s |
 | User actions | `userActions` | `true` where the applet UI can pick files, save, share, open links and enable notifications, and `attachFiles` works |
 | Picked files | | 16 per pick of at most 64 MiB each, 128 MiB per `attachFiles`; held for at most 30 minutes |
 | Service request or response body | | 256 KiB, with 3 s to connect and 3 s to read |
