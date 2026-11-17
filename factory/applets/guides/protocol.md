@@ -129,6 +129,7 @@ Params and results use the field names shown.
 | `page.call` | `{ context, generation, op, args, timeoutMs? }` | The operation's value (see [Page operations](#page-operations)). |
 | `page.cancel` | `{ context, callId? }` | `{}` |
 | `context.grant` | `{ id, grant }` | `{ granted: true, expiresInMs }`. Lets a hidden context's page use one website feature once (see [Grants](#grants)). |
+| `context.hold` | `{ id, level }` | `{}`. Keeps a covered context's page going while the foreground needs it (see [Activity](#activity)). |
 | `files.pick` | `{ accept?, multiple? }` | `{ files: [{ id, name, type, size }] }`, empty when the user cancels (see [User actions](#user-actions)). |
 | `files.release` | `{ ids }` | `{}`. Lets go of picked files. |
 | `downloads.save` | `{ context, url, filename? }` | `{ started: true }` |
@@ -534,6 +535,25 @@ A hidden context's page cannot show UI of its own: it may not go fullscreen, dow
 - One grant per context: a new grant replaces an unused one. The grant ends when it is used, after 5 seconds, and when the page navigates, the context is revealed or covered, a popup opens or the view goes away. Each end sends `context.grantEnded { id, grant, used }`.
 - `limits.grants` is true when the host takes `context.grant`. It is absent in an older Genesis.
 
+## Activity
+
+A covered context's page does not draw, so the host runs it at one of three levels: `awake` (full speed), `running` (scripts, timers and media, no drawing) and `resting` (timers and drawing paused). The page is awake while it loads, during a `page.call`, an input or a navigation and for a few seconds after, during a grant, and while it is revealed. Otherwise it rests, unless the foreground holds it with `context.hold`:
+
+```json
+{ "type": "request", "documentId": "d3", "requestId": 53, "method": "context.hold", "params": { "id": "main", "level": "running" } }
+```
+
+```json
+{ "type": "response", "documentId": "d3", "requestId": 53, "result": {} }
+```
+
+- `level` is `running`, `awake` or `null`. `running` lasts until the foreground changes it. `awake` is full speed for at most 30 seconds, then the hold counts as `running`. `null` releases the hold. An unknown `id` is `NOT_FOUND`.
+- One hold per context: each `context.hold` replaces the one before. The client counts its callers and sends the highest level any of them asks for.
+- A hold on a context that has not started starts it. Contexts start one after another, and a `page.call` or navigation that names a context starts it at once.
+- A new foreground document starts with no holds.
+- Requests and events are the same at every level. A watch on a resting page delivers its changes up to about a second late.
+- `limits.activity` is true when the host rests covered pages and takes `context.hold`. It is absent in an older Genesis, where a covered page always runs and `context.hold` answers `UNKNOWN_METHOD`.
+
 ## Error codes
 
 | Code | Meaning |
@@ -602,6 +622,7 @@ A hidden context's page cannot show UI of its own: it may not go fullscreen, dow
 | `trustedInput` | True when the shell can send real input to a hidden context. Absent in an older Genesis. |
 | `userActions` | True when the foreground can pick files, save, share, open links in apps and turn on notifications, and attach picked files with `attachFiles`. Absent in an older Genesis. |
 | `grants` | True when the foreground can let a hidden page use one website feature once with `context.grant`. Absent in an older Genesis. |
+| `activity` | True when the host rests a covered context's page while it is unused and takes `context.hold`. Absent in an older Genesis. |
 | `inputBurst`, `inputRefillMs` | A context's input budget: input page calls at once (20), and milliseconds for one to come back (1000). Absent in an older Genesis, which has no budget. |
 
 ## Versions

@@ -96,6 +96,13 @@ Use `{ url }` for every link that came from the website, so the routes decide wh
 
 Genesis refuses a navigation it cannot make, such as a URL outside the declared origins. The router logs the refusal to the console. A direct `context.navigate`, `back`, `forward` or `reload` rejects with a `GenesisError` instead, so catch it where the screen should show the failure.
 
+## Contexts start one after another
+
+Genesis starts the context on screen first and the others one at a time a few seconds apart, so the first screen does not wait for pages the user has not opened. A navigation or call that names a context starts it at once. A context that is not on screen rests until the applet uses it (see [how a covered page runs](page-control.md#how-a-covered-page-runs)).
+
+- Each context is a whole live page with its own memory. Declare a context only for a page the user reaches from a tab or a frequent journey. A page used rarely is a navigation inside an existing context.
+- Choose a `startUrl` the website does not redirect: open it on the device, note the URL the page settles on, and use that one. A redirect loads the site twice before the first screen. Keep route patterns for both addresses.
+
 ## Tabs and overlay screens
 
 Bottom tabs belong to the UI. A tab is either a context or an overlay screen:

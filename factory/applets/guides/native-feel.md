@@ -110,3 +110,4 @@ Copy this list into the current spec's Native feel section and mark each item ve
 - [ ] Pull to refresh and a labeled Refresh control where the product has refresh.
 - [ ] Light and dark, 200% text, the narrowest width and reduced motion all checked on the changed screens.
 - [ ] Controls that show the website carry the cue; the website appears nowhere else in the journeys.
+- [ ] The applet costs nothing when the user is not touching it: no polling, no timers that call the page, and a hold only while the page works alone ([performance](patterns.md#performance)).

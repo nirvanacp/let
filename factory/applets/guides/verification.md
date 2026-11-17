@@ -88,6 +88,9 @@ These check the [native feel](native-feel.md) bar. Fast flashes last one or two 
 | A slow network (throttled or a weak signal) | Skeletons shimmer, progress bars appear after 250 ms, nothing reads as empty while loading |
 | Reduced motion on | No spinner, shimmer or progress animation runs, including pseudo-element ones |
 | Dark theme, 200% text, the narrowest width | Every changed screen and its skeleton stay readable, with nothing clipped or overlapping |
+| Idle for 10 s on the main screen | The device stays cool and scrolling stays smooth afterwards |
+| A change the website makes on its own, such as a new message or a count | It appears on the applet screen within 2 s |
+| Play media, then browse the applet for a minute | It keeps playing, and the applet's player state follows each track |
 
 ## Diagnosing
 

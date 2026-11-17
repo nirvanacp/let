@@ -220,6 +220,17 @@ Let the site's own player go fullscreen. The video shows over the applet while t
 
 When the reader has a plain `https` file URL that loads without sign-in, the applet can also play the video inline with `<video src={url} controls playsInline>`. Streams that the site assembles in the page (`blob:` sources) play only in the site's player.
 
+## Play music or video under the applet
+
+A covered website rests while the applet is not using it, which pauses the timers a player needs to move to the next track ([how a covered page runs](page-control.md#how-a-covered-page-runs)). Hold the context at `running` while the page reports that it is playing, and let go when it stops:
+
+```tsx
+const playing = useWatch("playing", playingReader, { context: "primary" });
+useHold(playing.value === true, { context: "primary" });
+```
+
+A `running` page draws nothing, so this suits sound. Video the user should see belongs in the revealed website or in the site's fullscreen player above.
+
 ## Share
 
 Share the page's canonical address, not the applet's:

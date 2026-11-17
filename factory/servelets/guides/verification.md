@@ -38,4 +38,6 @@ curl -s 'http://127.0.0.1:8790/v1/notes?limit=10'
 3. Check the failure paths the applet shows: an empty list, a record that is gone, and a stale edit.
 4. Record the evidence in the applet's current spec: device, build, what was walked and what was not.
 
+Cost: `adb -s <serial> logcat -s servelet` prints one line per request with its time in milliseconds. Walk each screen and treat a request over 100 ms on the phone as a finding: look for a missing index, a list read without a limit, or several requests where one would do.
+
 Clear data and Remove in Applet info delete the servelet's database; use them only when a journey needs a fresh start and the user allows losing the records.

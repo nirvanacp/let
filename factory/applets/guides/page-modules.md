@@ -209,6 +209,8 @@ The UI runs it with `invoke("setVoted", { id, voted: true })` and shows the vote
 
 The steps themselves fail as `run` does, for example with `TARGET_NOT_FOUND` or `DEADLINE`. `invoke` never rejects for these; the failure arrives as the result's `outcome` and `code`.
 
+Readers and commands run inside a call, and a call wakes the page first, so they always run on an awake page (see [how a covered page runs](page-control.md#how-a-covered-page-runs)). A command that waits for the site returns `until` evidence; it does not run a timer loop of its own, which a resting page would not run on time.
+
 ## What `check` enforces
 
 `genesis-applet check` bundles the module with esbuild, imports it in Node and checks it before the build:
