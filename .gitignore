@@ -1,7 +1,14 @@
 node_modules/
 .DS_Store
-packages/core/dist/
-packages/sdk/dist/
-packages/sdk/.build-lock
-packages/applet-tools/kit/
+
+# Build output: package bundles, the exported builder kit, servelet builds and
+# TypeScript incremental state. Tools regenerate all of it.
 dist/
+build/
+packages/applet-tools/kit/
+packages/sdk/.build-lock
+.build-stamp
+*.tsbuildinfo
+*.wasm
+go.work
+go.work.sum
