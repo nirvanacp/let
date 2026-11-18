@@ -579,7 +579,9 @@ export function createContext(id: string, startUrl: string, session: Session): C
    * watch is open in the bound page.
    */
   function continueWatch(entry: WatchEntry) {
-    if (!state.bound || !entry.subscribed || entry.refs === 0 || !("list" in entry.spec) || entry.spec.virtualized !== true) return;
+    // The page agent decides whether the watch reads a virtualized list: a page-module reader
+    // carries that flag in the page, not in the spec this client holds.
+    if (!state.bound || !entry.subscribed || entry.refs === 0) return;
     const kept = entry.store.takeReturned();
     if (!kept) return;
     if (debug.on) debug.add("watch.continue", { context: id, watch: entry.id, records: kept.length });
