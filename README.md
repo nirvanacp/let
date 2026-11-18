@@ -167,7 +167,7 @@ The packages are not on npm yet. For now, use Let from a Genesis workspace, whic
 
 ## Versions
 
-This release matches manifest schema 6, bundle format 3, document protocol 1 and page control API 1, with every package at `0.0.0`. Genesis refuses an applet built for other versions, and `let-applet check` reports the difference before you install. Expect breaking changes until the first stable release.
+This release matches manifest schema 6, bundle format 3, document protocol 2 and page control API 1, with every package at `0.0.0`. Genesis refuses an applet built for other versions, and `let-applet check` reports the difference before you install. Expect breaking changes until the first stable release.
 
 ## Contributing
 

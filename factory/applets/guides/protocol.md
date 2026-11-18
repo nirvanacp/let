@@ -19,7 +19,7 @@ The host ignores text that does not parse as a document message. It answers a re
 A document starts by sending `hello`. The host answers with `bound`, or with `refused` when the document speaks another protocol version.
 
 ```json
-{ "type": "hello", "protocol": 1, "url": "https://news.ycombinator.com/" }
+{ "type": "hello", "protocol": 2, "url": "https://news.ycombinator.com/" }
 ```
 
 | Field | Meaning |
@@ -30,8 +30,8 @@ A document starts by sending `hello`. The host answers with `bound`, or with `re
 ```json
 {
   "type": "bound",
-  "protocol": 1,
-  "compat": { "manifestSchema": 6, "bundleFormat": 3, "protocol": 1, "adapterApi": 1, "sessionState": 1, "importEnvelope": 1, "credentialEnvelope": 1, "cookieEnvelope": 1, "packagesIndex": 1 },
+  "protocol": 2,
+  "compat": { "manifestSchema": 6, "bundleFormat": 3, "protocol": 2, "adapterApi": 1, "sessionState": 1, "importEnvelope": 1, "credentialEnvelope": 1, "cookieEnvelope": 1, "packagesIndex": 1 },
   "documentId": "d7",
   "appletId": "hn-reader",
   "revision": 3,
@@ -60,7 +60,7 @@ A document starts by sending `hello`. The host answers with `bound`, or with `re
 The values in the examples are illustrations. Read limits from `bound`, never from this file.
 
 ```json
-{ "type": "refused", "error": { "code": "PROTOCOL_MISMATCH", "message": "The page speaks protocol 2; this Genesis speaks 1" } }
+{ "type": "refused", "error": { "code": "PROTOCOL_MISMATCH", "message": "The page speaks protocol 1; this Genesis speaks 2" } }
 ```
 
 No `bound` follows `refused`. When a context document is refused, the foreground also receives `context.gone` with the code `PROTOCOL_MISMATCH`.

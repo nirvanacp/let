@@ -1,6 +1,6 @@
 # SDK reference
 
-This kit matches `@let/sdk` `0.0.0`, `@let/applet-tools` `0.0.0`, manifest schema `6`, bundle format `3`, protocol `1` and page control API `1` (`adapterApi` in the compatibility table). The SDK has four public entry points:
+This kit matches `@let/sdk` `0.0.0`, `@let/applet-tools` `0.0.0`, manifest schema `6`, bundle format `3`, protocol `2` and page control API `1` (`adapterApi` in the compatibility table). The SDK has four public entry points:
 
 | Import | Runs in | Use it for |
 | --- | --- | --- |
@@ -462,7 +462,7 @@ Every part checks the others before it runs:
 | --- | --- |
 | Manifest schema | 6 |
 | Bundle format | 3 |
-| Protocol | 1 |
+| Protocol | 2 |
 | Page control API (`adapterApi`) | 1 |
 | SDK and tools | 0.0.0 |
 
