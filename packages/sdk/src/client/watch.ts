@@ -79,11 +79,17 @@ export function watchStatus(value: WatchValue): DataStatus {
 export const SNAPSHOT_SLICE_MIN = 100;
 const SNAPSHOT_SLICE = 50;
 
-/**
- * How long a cached value stays on show after the page's own read came back empty. A website
- * often renders its content after the first read, and no message says that an empty page is done.
- */
-export const EMPTY_HOLD_MS = 5000;
+export interface WatchStoreOptions {
+  /** History entries whose last ready copy the store keeps. */
+  historyEntriesMax: number;
+  /**
+   * How long a cached value stays on show after the page's own read came back empty. A website
+   * often renders its content after the first read, and no message says that an empty page is
+   * done, so a context passes the time a page has to become ready (`limits.documentReadyMs`).
+   * Without it, an empty read shows at once.
+   */
+  emptyHoldMs?: number;
+}
 
 let batchDepth = 0;
 const heldNotifications = new Set<() => void>();
@@ -123,9 +129,10 @@ export function emptyWatchValue(): WatchValue {
  * the entry at once, marked `stale`, until the new document sends its snapshot.
  *
  * A cached value stays on show while the page's own read is empty: until that read has data, the
- * watch goes idle or fails, the page changes, or `EMPTY_HOLD_MS` pass.
+ * watch goes idle or fails, the page changes, or `emptyHoldMs` pass.
  */
-export function createWatchStore(options: { historyEntriesMax: number }): WatchStore {
+export function createWatchStore(options: WatchStoreOptions): WatchStore {
+  const emptyHoldMs = options.emptyHoldMs ?? 0;
   /** The watch's own state. `get()` returns `held` instead while a cached value is on show. */
   let current = emptyWatchValue();
   /** The value of the last cached snapshot, until the page's stream replaces it. */
@@ -150,14 +157,14 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
   function set(next: WatchValue) {
     if (same(next, current)) return;
     // An empty read of a page that may not have rendered yet does not replace cached data.
-    const hold = emptyRead(next) && (held !== null || showsCached());
+    const hold = emptyHoldMs > 0 && emptyRead(next) && (held !== null || showsCached());
     const shown = held ?? current;
     if (!next.stale) cached = null;
     current = next;
     remember();
     if (hold) {
       held = shown;
-      holdTimer ??= setTimeout(settle, EMPTY_HOLD_MS);
+      holdTimer ??= setTimeout(settle, emptyHoldMs);
       return;
     }
     release();

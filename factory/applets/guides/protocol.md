@@ -335,6 +335,8 @@ The foreground does not open watches in pages itself. It sends `watch.subscribe`
 
 The host keeps each subscribed watch's last value. When a page binds, the host first sends that value as a snapshot with `cached: true` and `at` (epoch milliseconds when it last changed), then the page's own messages follow. A cached snapshot carries no stream position. With `persist: true` the host also keeps the value on the phone for up to 7 days, for the next start of the applet; it erases kept values with `store.forget` and when the user clears the website's data.
 
+A website often renders after the page's first read. A snapshot that read nothing, a list without items or a null value, replaces a kept value with data only after the page has stayed empty for `limits.documentReadyMs`. Until then the host keeps and sends the kept value, and the client shows it, marked `stale`. The client shows the empty read sooner when the watch goes idle or fails, or the page changes. The host never sends an empty value as a cached snapshot.
+
 | Kind | Data | When |
 | --- | --- | --- |
 | `snapshot` | `{ status, value?, order?, records?, error?, truncated?, complete? }` | The first message, after a new view, after a resync, and whenever a patch cannot carry the change. |

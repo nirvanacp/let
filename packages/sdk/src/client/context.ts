@@ -605,7 +605,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
       }
       return existing.handle;
     }
-    const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
+    const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax, emptyHoldMs: limits.documentReadyMs });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
       id: watchId, specJson, spec, when: options.when, persist: options.persist === true, store, refs: 1, subscribed: false, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
