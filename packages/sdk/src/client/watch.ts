@@ -129,7 +129,8 @@ export function emptyWatchValue(): WatchValue {
  * the entry at once, marked `stale`, until the new document sends its snapshot.
  *
  * A cached value stays on show while the page's own read is empty: until that read has data, the
- * watch goes idle or fails, the page changes, or `emptyHoldMs` pass.
+ * watch goes idle or fails, the page changes, or `emptyHoldMs` pass. It does so too when it
+ * arrives after that empty read.
  */
 export function createWatchStore(options: WatchStoreOptions): WatchStore {
   const emptyHoldMs = options.emptyHoldMs ?? 0;
@@ -168,6 +169,11 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
       return;
     }
     release();
+    announce();
+  }
+
+  /** Tells the listeners, once the current batch of emits is applied. */
+  function announce() {
     if (batchDepth > 0) heldNotifications.add(notify);
     else notify();
   }
@@ -256,8 +262,19 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
     emit(event) {
       const { kind, seq, view } = event;
       if (event.cached) {
-        // A kept value fills in only until the page's own stream starts, and stays stale.
-        if (kind !== "snapshot" || stream || (current.status === "ready" && !current.stale)) return "ignored";
+        if (kind !== "snapshot") return "ignored";
+        // The page's first read can win the race against the kept value. While that read is
+        // empty, the kept value is still the best there is to show, and is held like one that came first.
+        if (stream && emptyHoldMs > 0 && !held && emptyRead(current) && sameUrl(url, event.url)) {
+          const value = { ...snapshot(event, event.data as WatchSnapshot), stale: true };
+          if (!hasData(value)) return "ignored";
+          held = value;
+          holdTimer ??= setTimeout(settle, emptyHoldMs);
+          announce();
+          return "applied";
+        }
+        // Otherwise a kept value fills in only until the page's own stream starts, and stays stale.
+        if (stream || (current.status === "ready" && !current.stale)) return "ignored";
         const value = { ...snapshot(event, event.data as WatchSnapshot), stale: true };
         set(value);
         cached = value;
