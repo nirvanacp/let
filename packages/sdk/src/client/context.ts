@@ -226,7 +226,7 @@ const CLOSED_WATCHES_MAX = 32;
 const HOLD_AWAKE_MAX_MS = 30_000;
 /** With the debug log on, applying one emit that takes longer than this is logged. */
 const EMIT_SLOW_MS = 8;
-/** Emits wait for the next animation frame, or this long when no frame comes, as in a hidden document. */
+/** Emits wait for the next animation frame, or this long when no frame comes. */
 const EMIT_FRAME_FALLBACK_MS = 100;
 
 /** `scheduler.yield`, where the engine has it. */
@@ -235,8 +235,16 @@ function yielder(): (() => Promise<unknown>) | null {
   return typeof scheduler?.yield === "function" ? () => scheduler.yield!() : null;
 }
 
-/** Runs `run` at the next animation frame, or after a short timeout without one. */
+/**
+ * Runs `run` at the next animation frame, or after a short timeout without one. A hidden
+ * document, such as the applet's page behind a revealed website, has no frames and slow timers,
+ * and draws nothing to batch for: there `run` follows the current task.
+ */
 function nextFrame(run: () => void) {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    queueMicrotask(run);
+    return;
+  }
   let done = false;
   const once = () => {
     if (done) return;
