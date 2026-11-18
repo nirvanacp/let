@@ -245,14 +245,14 @@ interface WatchEntry {
   store: WatchStore;
   handle: Watch;
   refs: number;
-  /** The generation the watch is open in, or null. */
-  openIn: number | null;
+  /** The host holds a subscription for this watch and opens it in each bound page. */
+  subscribed: boolean;
   lastResync: number;
   /** A resync that came within `RESYNC_GAP_MS` of the last one, sent when the gap is over. */
   resyncTimer: ReturnType<typeof setTimeout> | null;
   /** The last reference closed in this task; the page hears of it unless the watch opens again first. */
   closing: boolean;
-  /** `Date.now()` when the watch last opened while the debug log is on, until its first value; 0 otherwise. */
+  /** `Date.now()` when the watch last subscribed while the debug log is on, until its first value; 0 otherwise. */
   openedAt: number;
 }
 
@@ -506,21 +506,24 @@ export function createContext(id: string, startUrl: string, session: Session): C
   const watches = new Map<string, WatchEntry>();
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function openWatch(entry: WatchEntry) {
-    if (!state.bound || entry.refs === 0) return;
-    const generation = state.generation;
-    if (entry.openIn === generation) return;
-    entry.openIn = generation;
+  /**
+   * Subscribes to the watch in the host, which opens it in the context's bound page and in every
+   * page that binds after it, until `watch.unsubscribe`. An open that fails there arrives as an
+   * error status.
+   */
+  function subscribeWatch(entry: WatchEntry) {
+    if (entry.refs === 0 || entry.subscribed) return;
+    entry.subscribed = true;
     entry.store.restart();
     if (debug.on) {
       entry.openedAt = Date.now();
-      debug.add("watch.open", { context: id, watch: entry.id });
+      debug.add("watch.subscribe", { context: id, watch: entry.id });
     }
-    const args: Record<string, unknown> = { id: entry.id, spec: entry.spec };
-    if (entry.when) args.when = entry.when;
-    send("watch.open", args).catch(error => {
-      if (entry.openIn === generation) entry.openIn = null;
-      if (error instanceof GenesisError && (RETRY.has(error.code) || error.code === "RETIRED")) return;
+    const params: Record<string, unknown> = { context: id, id: entry.id, spec: entry.spec };
+    if (entry.when) params.when = entry.when;
+    session.request("watch.subscribe", params).catch(error => {
+      if (error instanceof GenesisError && error.code === "RETIRED") return;
+      entry.subscribed = false;
       entry.store.failed({ code: (error?.code ?? "NOT_READY") as ErrorCode, message: messageOf(error) });
     });
   }
@@ -538,8 +541,15 @@ export function createContext(id: string, startUrl: string, session: Session): C
     if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
     entry.resyncTimer = null;
     entry.lastResync = now;
-    if (entry.openIn !== state.generation || !state.bound) return openWatch(entry);
-    send("watch.resync", { id: entry.id }).catch(() => {});
+    if (!entry.subscribed) return subscribeWatch(entry);
+    // An unbound context sends a snapshot once its page binds and the host opens the watch.
+    if (!state.bound) return;
+    send("watch.resync", { id: entry.id }).catch(error => {
+      // The page has no such watch: its open failed. Subscribing again has the host open it.
+      if (!(error instanceof GenesisError && error.code === "NOT_FOUND") || !entry.subscribed) return;
+      entry.subscribed = false;
+      subscribeWatch(entry);
+    });
   }
 
   function watch(watchId: string, spec: ReadSpec, options: WatchOptions = {}): Watch {
@@ -556,14 +566,14 @@ export function createContext(id: string, startUrl: string, session: Session): C
         // A screen change that closed it in this same task never closed the page's watch, so its data is current.
         if (!existing.closing) existing.store.reopened();
         existing.closing = false;
-        openWatch(existing);
+        subscribeWatch(existing);
       }
       return existing.handle;
     }
     const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
-      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
+      id: watchId, specJson, spec, when: options.when, store, refs: 1, subscribed: false, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
       handle: {
         id: watchId,
         get: store.get,
@@ -578,7 +588,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
       },
     };
     watches.set(watchId, entry);
-    openWatch(entry);
+    subscribeWatch(entry);
     return entry.handle;
   }
 
@@ -589,8 +599,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
     for (const entry of [...watches.values()]) {
       if (!entry.closing) continue;
       entry.closing = false;
-      if (entry.openIn !== null && entry.openIn === state.generation && state.bound) send("watch.close", { id: entry.id }).catch(() => {});
-      entry.openIn = null;
+      if (entry.subscribed) session.request("watch.unsubscribe", { context: id, id: entry.id }).catch(() => {});
+      entry.subscribed = false;
       if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
       entry.resyncTimer = null;
       // The closed watch stays, following navigations, so its history copies outlive the screen.
@@ -620,7 +630,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     if (data.generation !== state.generation) return;
     if (!state.view || state.view.n !== data.view.n || state.view.url !== data.view.url || state.view.generation !== data.view.generation) set({ view: data.view });
     const entry = watches.get(data.stream);
-    if (!entry || entry.openIn !== data.generation) return;
+    if (!entry || !entry.subscribed) return;
     if (entry.store.emit(data) === "resync") resyncWatch(entry);
     if (debug.on && entry.openedAt) {
       debug.add("watch.first", { context: id, watch: entry.id, ms: Date.now() - entry.openedAt });
@@ -745,14 +755,12 @@ export function createContext(id: string, startUrl: string, session: Session): C
       boundCount++;
       stopLoading();
       set({ generation: data.generation, url: data.url, bound: true, loading: false, error: null });
-      for (const entry of watches.values()) openWatch(entry);
     },
     navigated(data) {
       if (data.generation < latest) return;
       // A new document: calls wait for its `context.bound`, which brings its generation.
       const newer = data.generation > latest;
       latest = data.generation;
-      if (newer) for (const entry of watches.values()) entry.openIn = null;
       for (const entry of watches.values()) entry.store.navigated(data);
       stopLoading();
       set({
@@ -770,10 +778,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     gone(data) {
       const error: ErrorBody = { code: (data.code ?? "NOT_READY") as ErrorCode, message: data.message ?? "The page is gone" };
       leftBy();
-      for (const entry of watches.values()) {
-        entry.openIn = null;
-        entry.store.gone(error);
-      }
+      for (const entry of watches.values()) entry.store.gone(error);
       stopLoading();
       set({ bound: false, loading: false, error });
     },
