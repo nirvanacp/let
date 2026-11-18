@@ -21,6 +21,7 @@ import { createNotifications, type Notifications } from "./notifications.js";
 import { createUserActions, type Downloads, type Files, type Links } from "./actions.js";
 import { createSavedState, type SavedState } from "./state.js";
 import { createStorage } from "./storage.js";
+import { debug as debugLog, startClientDebug } from "./debug.js";
 import { webViewTransport, type Transport } from "./transport.js";
 
 /** Time the client waits past a request's own deadline before it gives up on the answer itself. */
@@ -192,6 +193,12 @@ export interface Genesis {
   onSuspend(listener: () => void): () => void;
   onRetired(listener: () => void): () => void;
   readonly retired: boolean;
+  /**
+   * Records an applet event, as `app.<ev>`, in the debug log when the user turned the applet's
+   * log on; otherwise does nothing. `d` holds names, counts, durations and codes: never page
+   * text, stored data, typed text or anything else the user would not share.
+   */
+  debug(ev: string, d?: Record<string, unknown>): void;
 }
 
 export interface ConnectOptions {
@@ -215,6 +222,8 @@ export async function connect(options: ConnectOptions = {}): Promise<Genesis> {
 
 function createGenesis(session: Session): Genesis {
   const { manifest, appletId, revision, limits, compat } = session.bound;
+  startClientDebug(session);
+  if (debugLog.on) debugLog.add("bound", { revision, protocol: compat.protocol, contexts: manifest.contexts.length });
   const contexts = new Map<string, ContextControl>();
   for (const context of manifest.contexts) contexts.set(context.id, createContext(context.id, context.startUrl, session));
   const of = (id: string) => contexts.get(id);
@@ -280,5 +289,8 @@ function createGenesis(session: Session): Genesis {
     onSuspend: subscribe(listeners.suspend),
     onRetired: subscribe(listeners.retired),
     get retired() { return session.retired; },
+    debug(ev, d) {
+      if (debugLog.on) debugLog.add(`app.${ev}`, d);
+    },
   };
 }

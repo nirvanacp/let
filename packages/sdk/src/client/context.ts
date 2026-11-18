@@ -30,6 +30,7 @@ import {
 } from "@let/core";
 import { GenesisError } from "../bridge.js";
 import { AnswerTimeout, type Session } from "./session.js";
+import { debug } from "./debug.js";
 import { createWatchStore, type WatchStore, type WatchValue } from "./watch.js";
 
 /** What the UI knows about one context. */
@@ -218,6 +219,8 @@ const RESYNC_GAP_MS = 1000;
 const CLOSED_WATCHES_MAX = 32;
 /** How long the host keeps an "awake" hold at full speed before it counts as "running". */
 const HOLD_AWAKE_MAX_MS = 30_000;
+/** With the debug log on, applying one emit that takes longer than this is logged. */
+const EMIT_SLOW_MS = 8;
 
 interface InputRecord {
   key: string;
@@ -230,6 +233,8 @@ interface InputRecord {
   judging: boolean;
   /** Ends the wait for the destination. */
   abort: (() => void) | null;
+  /** `Date.now()` when the call started, for the debug log; 0 while the log is off. */
+  started: number;
 }
 
 interface WatchEntry {
@@ -247,6 +252,8 @@ interface WatchEntry {
   resyncTimer: ReturnType<typeof setTimeout> | null;
   /** The last reference closed in this task; the page hears of it unless the watch opens again first. */
   closing: boolean;
+  /** `Date.now()` when the watch last opened while the debug log is on, until its first value; 0 otherwise. */
+  openedAt: number;
 }
 
 export function createContext(id: string, startUrl: string, session: Session): ContextControl {
@@ -350,6 +357,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
   function settle(record: InputRecord, result: ActionResult) {
     if (inputs.get(record.key) !== record) return;
     inputs.delete(record.key);
+    if (debug.on) debug.add("input", { context: id, op: record.op, ms: record.started ? Date.now() - record.started : null, outcome: result.outcome, code: result.code });
     record.resolve(result);
     pendingChanged();
   }
@@ -385,7 +393,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     let resolve!: (result: ActionResult) => void;
     const promise = new Promise<ActionResult>(done => { resolve = done; });
     const target = args.target === undefined ? null : JSON.stringify(args.target);
-    const record: InputRecord = { key, op, args, target, promise, resolve, judging: false, abort: null };
+    const record: InputRecord = { key, op, args, target, promise, resolve, judging: false, abort: null, started: debug.on ? Date.now() : 0 };
     inputs.set(key, record);
     pendingChanged();
 
@@ -467,6 +475,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     const level = holds.awake > 0 && !awakeSpent ? "awake" : holds.awake + holds.running > 0 ? "running" : null;
     if (level === held) return;
     held = level;
+    if (debug.on) debug.add("hold", { context: id, level });
     // A hold is advice: a failed send changes nothing the applet can act on.
     session.request("context.hold", { id, level }).catch(() => {});
   }
@@ -503,6 +512,10 @@ export function createContext(id: string, startUrl: string, session: Session): C
     if (entry.openIn === generation) return;
     entry.openIn = generation;
     entry.store.restart();
+    if (debug.on) {
+      entry.openedAt = Date.now();
+      debug.add("watch.open", { context: id, watch: entry.id });
+    }
     const args: Record<string, unknown> = { id: entry.id, spec: entry.spec };
     if (entry.when) args.when = entry.when;
     send("watch.open", args).catch(error => {
@@ -550,7 +563,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
-      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null, closing: false,
+      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
       handle: {
         id: watchId,
         get: store.get,
@@ -599,6 +612,19 @@ export function createContext(id: string, startUrl: string, session: Session): C
     for (const record of [...inputs.values()]) {
       record.abort?.();
       settle(record, { outcome: "unknown", code: "CONTEXT_REPLACED", message: "The account changed before the input finished" });
+    }
+  }
+
+  /** Applies a page's emit to its watch, when it is for the current document and an open watch. */
+  function applyEmit(data: PageEmitEvent) {
+    if (data.generation !== state.generation) return;
+    if (!state.view || state.view.n !== data.view.n || state.view.url !== data.view.url || state.view.generation !== data.view.generation) set({ view: data.view });
+    const entry = watches.get(data.stream);
+    if (!entry || entry.openIn !== data.generation) return;
+    if (entry.store.emit(data) === "resync") resyncWatch(entry);
+    if (debug.on && entry.openedAt) {
+      debug.add("watch.first", { context: id, watch: entry.id, ms: Date.now() - entry.openedAt });
+      entry.openedAt = 0;
     }
   }
 
@@ -752,11 +778,12 @@ export function createContext(id: string, startUrl: string, session: Session): C
       set({ bound: false, loading: false, error });
     },
     emit(data) {
-      if (data.generation !== state.generation) return;
-      if (!state.view || state.view.n !== data.view.n || state.view.url !== data.view.url || state.view.generation !== data.view.generation) set({ view: data.view });
-      const entry = watches.get(data.stream);
-      if (!entry || entry.openIn !== data.generation) return;
-      if (entry.store.emit(data) === "resync") resyncWatch(entry);
+      if (!debug.on) return applyEmit(data);
+      const start = performance.now();
+      applyEmit(data);
+      const end = performance.now();
+      performance.measure(`genesis.emit ${id}/${data.stream}`, { start, end });
+      if (end - start > EMIT_SLOW_MS) debug.add("emit.apply", { context: id, watch: data.stream, kind: data.kind, ms: Math.round(end - start) });
     },
     grantEnded(data) {
       if (data.id !== id) return;

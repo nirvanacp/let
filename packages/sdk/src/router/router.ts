@@ -21,6 +21,7 @@ import {
   type TableRoute,
 } from "@let/core";
 import { GenesisError } from "../bridge.js";
+import { debug } from "../client/debug.js";
 import type { Watch } from "../client/context.js";
 import type { Genesis } from "../client/session.js";
 
@@ -184,10 +185,13 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
   let pendingChanged = false;
 
   let version = 0;
+  /** The screen last written to the debug log. */
+  let loggedScreen = "";
   function notify() {
     version++;
     pendingChanged = false;
     screenCache = undefined;
+    if (debug.on) logScreen();
     for (const listener of [...listeners]) listener();
   }
 
@@ -369,6 +373,15 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
       }
     }
     return (screenCache = screen);
+  }
+
+  /** Writes the screen to the debug log when it changed: its route id and context, never its params. */
+  function logScreen() {
+    const screen = currentScreen();
+    const text = screen ? `${screen.id} ${screen.context} ${screen.overlay}` : "";
+    if (text === loggedScreen) return;
+    loggedScreen = text;
+    debug.add("route", screen ? { screen: screen.id, context: screen.context, overlay: screen.overlay } : { screen: null });
   }
 
   let nextScreenKey = 1;

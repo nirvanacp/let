@@ -15,6 +15,7 @@ import { debounce } from "./engine/debounce.js";
 import { diffRegion, json, keepNear, mergeVirtualized, type PageRecord, type Region } from "./engine/diff.js";
 import { invalidate, touches, type Change, type Invalidation, type RegionIndex } from "./engine/invalidate.js";
 import { observe, type Observer } from "./engine/observe.js";
+import { debug } from "./debug.js";
 import { errorBody, PageError } from "./errors.js";
 import { reach } from "./locate.js";
 import type { Compiled, CompiledList } from "./read.js";
@@ -226,6 +227,7 @@ export function createWatches(host: WatchHost): Watches {
   function send(watch: Watch, kind: PageEmitParams["kind"], data: WatchSnapshot | WatchPatch | WatchStatus) {
     const view = host.view();
     const params: PageEmitParams = { stream: watch.id, kind, seq: ++watch.seq, view, url: view.url, data };
+    emitted++;
     return host.emit(params);
   }
 
@@ -371,8 +373,13 @@ export function createWatches(host: WatchHost): Watches {
     return false;
   }
 
+  /** Emits sent since the last batch began, for the debug log. */
+  let emitted = 0;
+
   function flush() {
     if (stopped) return;
+    const started = debug.on ? performance.now() : 0;
+    emitted = 0;
     const changes = pending;
     const whole = overflow;
     pending = [];
@@ -397,6 +404,7 @@ export function createWatches(host: WatchHost): Watches {
     }
     measure();
     observeScopes();
+    if (debug.on && emitted > 0) debug.add("publish", { changes: changes.length, emits: emitted, ms: Math.round(performance.now() - started) });
   }
 
   /** Runs one watch's step of a batch; a throw becomes that watch's error, and the other watches go on. */
