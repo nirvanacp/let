@@ -52,6 +52,51 @@ export interface WatchStore {
   reopened(): void;
   /** Forgets every kept copy; with `current`, also the data shown now. */
   forget(current: boolean): void;
+  /**
+   * Compares a large snapshot's records with the current ones ahead of `emit`, awaiting `pause`
+   * between slices, so the work yields to input. `emit` uses the result while the data it was
+   * compared with is still current.
+   */
+  prepare(event: PageEmitEvent, pause: () => Promise<unknown>): Promise<void>;
+}
+
+/** The status a screen renders from: a skeleton, the data, the data marked as refreshing, or an error. */
+export type DataStatus = "empty" | "loading" | "fresh" | "stale" | "failed";
+
+/**
+ * One status for a watch value. `loading`: no data yet, show a skeleton. `empty`: the page has
+ * nothing to show, or the watch is idle on this page. `fresh`: current data. `stale`: data from an
+ * earlier read, shown while the page reads again or after a failed read. `failed`: an error and no data.
+ */
+export function watchStatus(value: WatchValue): DataStatus {
+  if (hasData(value)) return value.status === "ready" && !value.stale ? "fresh" : "stale";
+  if (value.status === "error") return "failed";
+  if (value.idle || (value.status === "ready" && !value.stale)) return "empty";
+  return "loading";
+}
+
+/** A snapshot with more records than this is compared in slices when the caller can yield. */
+export const SNAPSHOT_SLICE_MIN = 100;
+const SNAPSHOT_SLICE = 50;
+
+let batchDepth = 0;
+const heldNotifications = new Set<() => void>();
+
+/**
+ * Runs `apply`, and calls each store's listeners once after it, however many times its value
+ * changed meanwhile.
+ */
+export function batchNotifications(apply: () => void): void {
+  batchDepth++;
+  try {
+    apply();
+  } finally {
+    if (--batchDepth === 0) {
+      const notifications = [...heldNotifications];
+      heldNotifications.clear();
+      for (const notify of notifications) notify();
+    }
+  }
 }
 
 type Data = Pick<WatchValue, "value" | "order" | "records" | "truncated" | "complete" | "view" | "updatedAt">;
@@ -82,12 +127,17 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
   /** The URL the current data belongs to. */
   let url: string | null = null;
   const listeners = new Set<() => void>();
+  /** The records of a large snapshot, compared ahead of `emit` with `base`. */
+  let prepared: { body: unknown; base: Readonly<Record<string, unknown>>; records: Record<string, unknown> } | null = null;
+
+  const notify = () => { for (const listener of [...listeners]) listener(); };
 
   function set(next: WatchValue) {
     if (same(next, current)) return;
     current = next;
     remember();
-    for (const listener of [...listeners]) listener();
+    if (batchDepth > 0) heldNotifications.add(notify);
+    else notify();
   }
 
   /** Keeps the current data as the history entry of the current index, when they agree. */
@@ -100,7 +150,9 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
 
   function snapshot(event: PageEmitEvent, body: WatchSnapshot): WatchValue {
     const list = Array.isArray(body.order);
-    const records = list ? reuse(current.records, body.records ?? {}) : EMPTY_RECORDS;
+    const ready = prepared && prepared.body === body && prepared.base === current.records ? prepared.records : null;
+    prepared = null;
+    const records = list ? ready ?? reuse(current.records, body.records ?? {}) : EMPTY_RECORDS;
     const order = list ? sameArray(current.order, body.order!) ? current.order : Object.freeze([...body.order!]) : EMPTY_ORDER;
     url = event.url;
     if (body.status === "error") {
@@ -220,6 +272,23 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
       url = null;
       set(emptyWatchValue());
     },
+
+    async prepare(event, pause) {
+      const body = event.data as WatchSnapshot;
+      if (event.kind !== "snapshot" || !Array.isArray(body.order) || !body.records) return;
+      const keys = Object.keys(body.records);
+      if (keys.length <= SNAPSHOT_SLICE_MIN) return;
+      const base = current.records;
+      const out: Record<string, unknown> = Object.create(null);
+      let changed = keys.length !== Object.keys(base).length;
+      for (let start = 0; start < keys.length; start += SNAPSHOT_SLICE) {
+        if (start > 0) await pause();
+        for (const key of keys.slice(start, start + SNAPSHOT_SLICE)) {
+          if (reuseOne(base, body.records, out, key)) changed = true;
+        }
+      }
+      prepared = { body, base, records: changed ? Object.freeze(out) : base };
+    },
   };
 
   /** Shows the history copy of the entry, marked stale, or nothing until the page's snapshot arrives. */
@@ -264,12 +333,15 @@ function reuse(previous: Readonly<Record<string, unknown>>, next: Record<string,
   const out: Record<string, unknown> = Object.create(null);
   const keys = Object.keys(next);
   let changed = keys.length !== Object.keys(previous).length;
-  for (const key of keys) {
-    const old = previous[key];
-    out[key] = old === undefined ? next[key] : keep(old, next[key]);
-    if (out[key] !== old) changed = true;
-  }
+  for (const key of keys) if (reuseOne(previous, next, out, key)) changed = true;
   return changed ? Object.freeze(out) : previous;
+}
+
+/** Sets `out[key]` to the previous record when its JSON is unchanged; true when it changed. */
+function reuseOne(previous: Readonly<Record<string, unknown>>, next: Record<string, unknown>, out: Record<string, unknown>, key: string) {
+  const old = previous[key];
+  out[key] = old === undefined ? next[key] : keep(old, next[key]);
+  return out[key] !== old;
 }
 
 /** True when nothing a UI reads changed, so `get()` keeps returning the same object; `updatedAt` follows the data. */

@@ -31,7 +31,7 @@ import {
 import { GenesisError } from "../bridge.js";
 import { AnswerTimeout, type Session } from "./session.js";
 import { debug } from "./debug.js";
-import { createWatchStore, type WatchStore, type WatchValue } from "./watch.js";
+import { batchNotifications, createWatchStore, SNAPSHOT_SLICE_MIN, type WatchStore, type WatchValue } from "./watch.js";
 
 /** What the UI knows about one context. */
 export interface ContextState {
@@ -226,6 +226,34 @@ const CLOSED_WATCHES_MAX = 32;
 const HOLD_AWAKE_MAX_MS = 30_000;
 /** With the debug log on, applying one emit that takes longer than this is logged. */
 const EMIT_SLOW_MS = 8;
+/** Emits wait for the next animation frame, or this long when no frame comes, as in a hidden document. */
+const EMIT_FRAME_FALLBACK_MS = 100;
+
+/** `scheduler.yield`, where the engine has it. */
+function yielder(): (() => Promise<unknown>) | null {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<unknown> } }).scheduler;
+  return typeof scheduler?.yield === "function" ? () => scheduler.yield!() : null;
+}
+
+/** Runs `run` at the next animation frame, or after a short timeout without one. */
+function nextFrame(run: () => void) {
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    run();
+  };
+  const timer = setTimeout(once, typeof requestAnimationFrame === "function" ? EMIT_FRAME_FALLBACK_MS : 0);
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(once);
+}
+
+/** A list snapshot large enough to compare in slices. */
+function large(event: PageEmitEvent) {
+  if (event.kind !== "snapshot") return false;
+  const records = (event.data as { records?: unknown } | null)?.records;
+  return typeof records === "object" && records !== null && Object.keys(records).length > SNAPSHOT_SLICE_MIN;
+}
 
 interface InputRecord {
   key: string;
@@ -624,6 +652,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
   }
 
   function forget(options: { current?: boolean; keepInputs?: boolean } = {}) {
+    drainEmits();
     for (const entry of watches.values()) entry.store.forget(options.current === true);
     // Genesis's own copies of the pages, too, so none shows on the next start.
     session.request("store.forget", { context: id }).catch(fail("store.forget"));
@@ -651,6 +680,76 @@ export function createContext(id: string, startUrl: string, session: Session): C
       debug.add("watch.first", { context: id, watch: entry.id, ms: Date.now() - entry.openedAt });
       entry.openedAt = 0;
     }
+  }
+
+  // ---- Emit queue -------------------------------------------------------------------------------
+
+  /**
+   * Emits wait here for the next animation frame, then apply together, so each watch's listeners
+   * run once per frame. A large snapshot is compared in slices that yield to input first. Every
+   * other context event applies the waiting emits before it, so the order stays the host's.
+   */
+  const emitQueue: PageEmitEvent[] = [];
+  let flushScheduled = false;
+  let flushing = false;
+
+  function queueEmit(data: PageEmitEvent) {
+    emitQueue.push(data);
+    scheduleFlush();
+  }
+
+  function scheduleFlush() {
+    if (flushScheduled || flushing) return;
+    flushScheduled = true;
+    nextFrame(() => {
+      flushScheduled = false;
+      void flushEmits();
+    });
+  }
+
+  async function flushEmits() {
+    flushing = true;
+    const pause = yielder();
+    try {
+      while (emitQueue.length) {
+        const next = emitQueue[0]!;
+        if (pause && large(next)) {
+          await watches.get(next.stream)?.store.prepare(next, pause);
+          // Another context event applied it meanwhile.
+          if (emitQueue[0] !== next) continue;
+        }
+        batchNotifications(() => {
+          let first = true;
+          while (emitQueue.length) {
+            const event = emitQueue[0]!;
+            if (!first && pause && large(event)) break;
+            first = false;
+            emitQueue.shift();
+            applyTimed(event);
+          }
+        });
+      }
+    } finally {
+      flushing = false;
+      if (emitQueue.length) scheduleFlush();
+    }
+  }
+
+  /** Applies every waiting emit now. */
+  function drainEmits() {
+    if (!emitQueue.length) return;
+    batchNotifications(() => {
+      while (emitQueue.length) applyTimed(emitQueue.shift()!);
+    });
+  }
+
+  function applyTimed(data: PageEmitEvent) {
+    if (!debug.on) return applyEmit(data);
+    const start = performance.now();
+    applyEmit(data);
+    const end = performance.now();
+    performance.measure(`genesis.emit ${id}/${data.stream}`, { start, end });
+    if (end - start > EMIT_SLOW_MS) debug.add("emit.apply", { context: id, watch: data.stream, kind: data.kind, ms: Math.round(end - start) });
   }
 
   function resyncAll() {
@@ -765,6 +864,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
   return {
     handle,
     bound(data) {
+      drainEmits();
       if (data.generation < latest) return;
       latest = data.generation;
       boundCount++;
@@ -772,6 +872,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
       set({ generation: data.generation, url: data.url, bound: true, loading: false, error: null });
     },
     navigated(data) {
+      drainEmits();
       if (data.generation < latest) return;
       // A new document: calls wait for its `context.bound`, which brings its generation.
       const newer = data.generation > latest;
@@ -791,20 +892,14 @@ export function createContext(id: string, startUrl: string, session: Session): C
       set({ loading: true });
     },
     gone(data) {
+      drainEmits();
       const error: ErrorBody = { code: (data.code ?? "NOT_READY") as ErrorCode, message: data.message ?? "The page is gone" };
       leftBy();
       for (const entry of watches.values()) entry.store.gone(error);
       stopLoading();
       set({ bound: false, loading: false, error });
     },
-    emit(data) {
-      if (!debug.on) return applyEmit(data);
-      const start = performance.now();
-      applyEmit(data);
-      const end = performance.now();
-      performance.measure(`genesis.emit ${id}/${data.stream}`, { start, end });
-      if (end - start > EMIT_SLOW_MS) debug.add("emit.apply", { context: id, watch: data.stream, kind: data.kind, ms: Math.round(end - start) });
-    },
+    emit: queueEmit,
     grantEnded(data) {
       if (data.id !== id) return;
       for (const listener of [...grantListeners]) {

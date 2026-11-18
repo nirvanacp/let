@@ -66,6 +66,11 @@ export interface RouterOptions {
   };
   /** Replaces the default presentation rules: whether a context shows the applet (`custom`) or its website. */
   decide?: (context: CoordinatorContext, route: TableRoute | null) => Presentation;
+  /**
+   * A screen change runs inside a View Transition where the engine has them and the person has not
+   * asked for reduced motion, so the screens cross-fade. `false` turns it off. True by default.
+   */
+  viewTransitions?: boolean;
 }
 
 /** `{ url }` loads a website URL in a context; `{ screen }` opens an overlay screen. */
@@ -187,12 +192,40 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
   let version = 0;
   /** The screen last written to the debug log. */
   let loggedScreen = "";
+  /** The key of the screen the listeners last heard of. */
+  let shownKey: string | null = null;
+  /** A View Transition is waiting to tell the listeners. */
+  let transitioning = false;
   function notify() {
     version++;
     pendingChanged = false;
     screenCache = undefined;
     if (debug.on) logScreen();
+    if (transitioning) return;
+    const previous = shownKey;
+    shownKey = currentScreen()?.key ?? null;
+    if (previous !== null && shownKey !== null && previous !== shownKey && revealedNow() === null && canTransition()) {
+      transitioning = true;
+      document.startViewTransition!(() => {
+        transitioning = false;
+        shownKey = currentScreen()?.key ?? null;
+        tell();
+        // The UI renders in a microtask after the listeners, as React does; the new state is captured after it.
+        return new Promise<void>(resolve => setTimeout(resolve, 0));
+      });
+      return;
+    }
+    tell();
+  }
+
+  function tell() {
     for (const listener of [...listeners]) listener();
+  }
+
+  function canTransition() {
+    if (options.viewTransitions === false || destroyed || typeof document === "undefined") return false;
+    if (typeof document.startViewTransition !== "function" || document.visibilityState !== "visible") return false;
+    return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
   // ---- Coordinator ------------------------------------------------------------------------------
