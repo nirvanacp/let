@@ -627,6 +627,12 @@ export function createContext(id: string, startUrl: string, session: Session): C
 
   /** Applies a page's emit to its watch, when it is for the current document and an open watch. */
   function applyEmit(data: PageEmitEvent) {
+    if (data.cached) {
+      // A value Genesis kept, sent before the page has bound: it belongs to no document.
+      const entry = watches.get(data.stream);
+      if (entry?.subscribed) entry.store.emit(data);
+      return;
+    }
     if (data.generation !== state.generation) return;
     if (!state.view || state.view.n !== data.view.n || state.view.url !== data.view.url || state.view.generation !== data.view.generation) set({ view: data.view });
     const entry = watches.get(data.stream);

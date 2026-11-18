@@ -24,6 +24,11 @@ export interface WatchValue<V = unknown, R = unknown> {
   complete: boolean | undefined;
   /** The page the data was read from, or null before the first snapshot. */
   view: ViewId | null;
+  /**
+   * Epoch milliseconds when the data last changed, or null without data. A value Genesis kept from
+   * an earlier visit shows, marked `stale`, with the time it was read, until the page's snapshot.
+   */
+  updatedAt: number | null;
 }
 
 /** What the caller does after `emit`: `resync` means a patch could not be applied and a fresh snapshot is needed. */
@@ -49,7 +54,7 @@ export interface WatchStore {
   forget(current: boolean): void;
 }
 
-type Data = Pick<WatchValue, "value" | "order" | "records" | "truncated" | "complete" | "view">;
+type Data = Pick<WatchValue, "value" | "order" | "records" | "truncated" | "complete" | "view" | "updatedAt">;
 
 const EMPTY_ORDER: readonly string[] = Object.freeze([]);
 const EMPTY_RECORDS: Readonly<Record<string, unknown>> = Object.freeze(Object.create(null));
@@ -57,7 +62,7 @@ const EMPTY_RECORDS: Readonly<Record<string, unknown>> = Object.freeze(Object.cr
 export function emptyWatchValue(): WatchValue {
   return {
     status: "loading", idle: false, stale: false, value: null, order: EMPTY_ORDER, records: EMPTY_RECORDS,
-    error: null, truncated: false, complete: undefined, view: null,
+    error: null, truncated: false, complete: undefined, view: null, updatedAt: null,
   };
 }
 
@@ -112,6 +117,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
       truncated: body.truncated === true,
       complete: body.complete,
       view: sameView(current.view, event.view) ? current.view : event.view,
+      updatedAt: event.at ?? Date.now(),
     };
   }
 
@@ -126,7 +132,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
     }
     const order = body.order && !sameArray(current.order, body.order) ? Object.freeze([...body.order]) : current.order;
     const complete = "complete" in body ? body.complete : current.complete;
-    return { ...current, order, records, complete };
+    return { ...current, order, records, complete, updatedAt: Date.now() };
   }
 
   function status(event: PageEmitEvent, body: WatchStatus): WatchValue {
@@ -147,6 +153,12 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
 
     emit(event) {
       const { kind, seq, view } = event;
+      if (event.cached) {
+        // A kept value fills in only until the page's own stream starts, and stays stale.
+        if (kind !== "snapshot" || stream || (current.status === "ready" && !current.stale)) return "ignored";
+        set({ ...snapshot(event, event.data as WatchSnapshot), stale: true });
+        return "applied";
+      }
       if (kind === "patch") {
         if (!stream || stream.generation !== view.generation || stream.n !== view.n || seq !== stream.seq + 1) return "resync";
         stream.seq = seq;
@@ -221,8 +233,8 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
 }
 
 function data(value: WatchValue): Data {
-  const { value: v, order, records, truncated, complete, view } = value;
-  return { value: v, order, records, truncated, complete, view };
+  const { value: v, order, records, truncated, complete, view, updatedAt } = value;
+  return { value: v, order, records, truncated, complete, view, updatedAt };
 }
 
 function hasData(value: WatchValue) {
@@ -260,7 +272,7 @@ function reuse(previous: Readonly<Record<string, unknown>>, next: Record<string,
   return changed ? Object.freeze(out) : previous;
 }
 
-/** True when nothing a UI reads changed, so `get()` keeps returning the same object. */
+/** True when nothing a UI reads changed, so `get()` keeps returning the same object; `updatedAt` follows the data. */
 function same(a: WatchValue, b: WatchValue) {
   return a.status === b.status && a.idle === b.idle && a.stale === b.stale && a.value === b.value
     && a.order === b.order && a.records === b.records && a.error === b.error && a.truncated === b.truncated
