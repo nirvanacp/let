@@ -77,6 +77,7 @@ genesis.ready();
 | `appletId`, `revision`, `manifest`, `limits`, `compat` | The installed applet, its bundled manifest, the host's limits and its compatibility values. |
 | `contextIds` | The declared context ids, in manifest order. |
 | `context(id?)` | The `ContextHandle` of a context, the first one by default. |
+| `forgetCached(contextId?)` | Forgets the page values Genesis kept to show before a page reads, in memory and on the phone, of one context or every context. `ContextHandle.forget` does it for its context too. |
 | `website` | Shows and hides a context's website (see [Website](#website)). |
 | `onBack(handler)` | Handles Android Back. The newest handler runs first, and the first that returns `true` consumes Back. When none does, Genesis leaves the applet. Handlers answer at once. |
 | `leave()` | Leaves the applet, after a consumed Back that asked the person first. |
@@ -106,7 +107,7 @@ genesis.ready();
 | `Expect` | `{ url?, notUrl?, read? }`, which judges the page an input leads to. |
 | `PendingInput` | `{ op, args }` of an input that has not settled. |
 | `Watch` | `{ id, get(), subscribe(listener), resync(), close() }`. |
-| `WatchOptions` | `{ when?: UrlGuard[] }`. The watch reads only on matching URLs. |
+| `WatchOptions` | `{ when?: UrlGuard[]; persist?: boolean }`. The watch reads only on matching URLs. With `persist`, Genesis also keeps its last value on the phone for up to 7 days, to show on the next start. Both are part of the watch's specification. |
 
 | `ContextHandle` member | Signature |
 | --- | --- |
@@ -149,7 +150,7 @@ if (result.outcome !== "observed") console.warn(result.code, result.message);
 
 | Export | Signature | Purpose |
 | --- | --- | --- |
-| `WatchValue` | interface | `{ status, idle, stale, value, order, records, error, truncated, complete, view }`. `value` holds a `one` or `value` read, and `order` and `records` hold a list. `complete` is `false` while a list's "more" link is present. |
+| `WatchValue` | interface | `{ status, idle, stale, value, order, records, error, truncated, complete, view, updatedAt }`. `value` holds a `one` or `value` read, and `order` and `records` hold a list. `complete` is `false` while a list's "more" link is present. `updatedAt` is when the data last changed, in epoch milliseconds. A value Genesis kept from an earlier visit shows at once as `ready` and `stale`, with its `updatedAt`, until the page's own snapshot. |
 | `createWatchStore` | `createWatchStore({ historyEntriesMax }): WatchStore` | The client side of one watch stream. `ContextHandle.watch` uses it, and a custom transport or test can too. |
 | `WatchStore` | interface | `get`, `subscribe`, `emit`, `navigated`, `gone` and the other entry points of a stream. |
 | `EmitResult` | `"applied" \| "ignored" \| "resync"` | What `WatchStore.emit` did with a message. |
@@ -309,7 +310,7 @@ router.subscribe(() => console.log(router.screen()?.id, router.status().status))
 | `GenesisProvider` | `<GenesisProvider genesis router?>` | Provides a client you connected yourself. |
 | `useGenesis` | `useGenesis(): Genesis` | The connected client. |
 | `useContextState` | `useContextState(contextId?): ContextState` | A context's state. |
-| `useWatch` | `useWatch(id, spec, { when?, context? }): WatchValue` | Opens a watch while the component is mounted. An equal `id` and specification share one watch. |
+| `useWatch` | `useWatch(id, spec, { when?, persist?, context? }): WatchValue` | Opens a watch while the component is mounted. An equal `id` and specification share one watch. |
 | `useRecord` | `useRecord(watchId, key, contextId?)` | One record of a list watch that a `useWatch` in the same provider has open. It re-renders only when that record changes. |
 | `useCommand` | `useCommand(name, contextId?)` | Returns `(args?, options?: CommandOptions) => Promise<ActionResult & { value? }>` for a page module command. The promise never rejects. |
 | `CommandOptions` | `{ target?, expect?, navigates?, timeoutMs? }` | Options of a command call. |
