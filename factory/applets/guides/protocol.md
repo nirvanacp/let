@@ -214,7 +214,7 @@ Events a context document receives:
 | `inspect` | `{ target }` | `{ count, first? }`. `first` is `{ tag, text, visible, enabled, checked?, focused, rect }`, with `text` cut to 200 characters. A target not on the page is `{ count: 0 }`. |
 | `watch.open` | `{ id, spec, when? }` | `{}`. Starts a watch stream named `id`. |
 | `watch.close` | `{ id }` | `{}` |
-| `watch.resync` | `{ id? }` | `{}`. Sends a fresh snapshot of that watch, or of every watch. |
+| `watch.resync` | `{ id?, kept? }` | `{}`. Sends a fresh snapshot of that watch, or of every watch. `kept` needs `id` and is the `{ key, data }` records, in order, that the client kept of this history entry from an earlier document; a virtualized list reads again and continues from them when one of the rows on the page is among them. Other watches ignore it. |
 | `wait` | `{ for, timeoutMs }` | `{}` once the condition holds; `DEADLINE` when it does not in time. |
 | `click` | `{ target, gesture?, count?, ...options }` | `ActionResult`. `gesture` is `click` (default), `tap` or `mouse`; `count` is 1 or 2. |
 | `longPress` | `{ target, ms?, ...options }` | `ActionResult` |
