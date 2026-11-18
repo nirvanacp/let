@@ -44,6 +44,19 @@ export interface Limits {
   inputBurst?: number;
   /** Milliseconds for one input call of the burst to come back. */
   inputRefillMs?: number;
+  /** The user turned this applet's debug log on: the document sends its events with `debug.log`. Absent in an older Genesis. */
+  debugLog?: boolean;
+}
+
+/**
+ * One debug log event. `t` is milliseconds since the epoch, `ev` names the event and `d` holds
+ * its fields: names, counts, durations and error codes, never page text, stored data, typed
+ * text, cookies or query strings.
+ */
+export interface LogEntry {
+  t: number;
+  ev: string;
+  d?: Record<string, unknown>;
 }
 
 /** The first message a document sends. */
@@ -137,8 +150,9 @@ export type ForegroundMethod =
   | "back.handled" | "back.leave"
   | "page.call" | "page.cancel"
   | "context.grant" | "context.hold"
-  | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable";
-export type ContextMethod = "page.result" | "page.progress" | "page.emit" | "page.input" | "page.files" | "page.share";
+  | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable"
+  | "debug.log";
+export type ContextMethod = "page.result" | "page.progress" | "page.emit" | "page.input" | "page.files" | "page.share" | "debug.log";
 export type Method = ForegroundMethod | ContextMethod;
 
 export type ForegroundEventName =
