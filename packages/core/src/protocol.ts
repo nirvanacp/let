@@ -149,6 +149,7 @@ export type ForegroundMethod =
   | "session.save"
   | "back.handled" | "back.leave"
   | "page.call" | "page.cancel"
+  | "watch.subscribe" | "watch.unsubscribe"
   | "context.grant" | "context.hold"
   | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable"
   | "debug.log";
@@ -352,6 +353,27 @@ export interface PageCallParams {
 export interface PageCancelParams {
   context: string;
   callId?: string;
+}
+
+/**
+ * Params of the foreground method `watch.subscribe`. The host opens the watch (`watch.open`) in
+ * every document of the context that binds while the subscription lasts, and reports an open that
+ * failed as a `status` emit with `status: "error"`. Answers `{}` at once; the same `id` with
+ * another `spec` or `when` answers `CONFLICT`. A subscription ends with `watch.unsubscribe`, a new
+ * foreground document or the applet's retirement. `watch.open` and `watch.close` are not
+ * `page.call` operations of the foreground.
+ */
+export interface WatchSubscribeParams {
+  context: string;
+  id: string;
+  spec: ReadSpec;
+  when?: UrlGuard[];
+}
+
+/** Params of the foreground method `watch.unsubscribe`: the host closes the page's watch. */
+export interface WatchUnsubscribeParams {
+  context: string;
+  id: string;
 }
 
 /** Data of the context event `call`. `deadlineMs` is the time the call has, in milliseconds. */
