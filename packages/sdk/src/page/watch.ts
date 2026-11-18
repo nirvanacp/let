@@ -1,4 +1,5 @@
 import {
+  entryKey,
   matchesGuard,
   type ErrorBody,
   type Limits,
@@ -22,6 +23,8 @@ import type { Compiled, CompiledList } from "./read.js";
 
 /** Past this many unprocessed changes a batch re-reads every watch instead of tracking them. */
 const CHANGES_MAX = 10000;
+/** Virtualized lists whose records are kept after their view changed or their watch closed; the oldest goes first. */
+const KEPT_MAX = 8;
 
 export interface WatchHost {
   limits: Limits;
@@ -44,6 +47,8 @@ interface State {
 
 interface Watch {
   id: string;
+  /** The specification as JSON, so kept records are never used under another one. */
+  spec: string;
   compiled: Compiled;
   when?: UrlGuard[];
   seq: number;
@@ -63,6 +68,8 @@ interface Watch {
   state: State;
   /** What the client has: the state as last emitted. */
   sent: State | null;
+  /** The records a virtualized list had when this view was last read, until the first read that finds items. */
+  kept: PageRecord[] | null;
 }
 
 export interface Watches {
@@ -89,6 +96,24 @@ export function createWatches(host: WatchHost): Watches {
   let observer: Observer | null = null;
   let stopped = false;
   const absent = new WeakSet<PageRecord>();
+  /**
+   * The records of virtualized lists by watch and view. A website that comes back to a view, as
+   * on Back, renders only the rows around its scroll position, so the list continues from the
+   * records it had there instead of starting over with those few rows.
+   */
+  const kept = new Map<string, PageRecord[]>();
+  let viewKey = entryKey(location.href);
+
+  const keptKey = (watch: Watch) => `${viewKey}\n${watch.id}\n${watch.spec}`;
+
+  /** Keeps a virtualized list's records for the view they were read in. */
+  function keep(watch: Watch) {
+    if (watch.compiled.kind !== "list" || !watch.compiled.virtualized || watch.state.records.length === 0) return;
+    const key = keptKey(watch);
+    kept.delete(key);
+    kept.set(key, watch.state.records);
+    if (kept.size > KEPT_MAX) kept.delete(kept.keys().next().value!);
+  }
 
   const batch = debounce(flush, limits.publishQuietMs, limits.publishMaxDelayMs);
 
@@ -166,6 +191,7 @@ export function createWatches(host: WatchHost): Watches {
    */
   function readList(watch: Watch, compiled: CompiledList, dirty: Set<string> | "all"): State {
     const previous = watch.state;
+    let continued = previous.records;
     const elements = watch.root ? compiled.items(watch.root) : [];
     const before = new Map(previous.records.map(record => [record.key, record]));
     const known = watch.elements;
@@ -182,7 +208,15 @@ export function createWatches(host: WatchHost): Watches {
     }
     watch.elements = next;
     const state: State = { status: "ready", value: null, records, complete: compiled.complete() };
-    if (compiled.virtualized) state.records = markAbsent(mergeVirtualized(previous.records, records, compiled.limit), next);
+    if (compiled.virtualized) {
+      // The first rows the page shows decide: the kept records continue when one of them is among
+      // these rows, and are dropped when the page shows another list.
+      if (watch.kept && records.length > 0) {
+        if (continued.length === 0 && watch.kept.some(record => next.has(record.key))) continued = watch.kept;
+        watch.kept = null;
+      }
+      state.records = markAbsent(mergeVirtualized(continued, records, compiled.limit), next);
+    }
     if (truncated) state.truncated = true;
     return state;
   }
@@ -452,9 +486,11 @@ export function createWatches(host: WatchHost): Watches {
       if (watches.size >= limits.watchesMax) throw new PageError("QUOTA_EXCEEDED", `At most ${limits.watchesMax} watches can be open`);
       const compiled = host.compile(spec);
       const watch: Watch = {
-        id, compiled, when, seq: 0, idle: false, snapshot: true, root: null, items: new WeakMap(), elements: new Map(),
+        id, spec: JSON.stringify(spec), compiled, when, seq: 0, idle: false, snapshot: true, root: null, items: new WeakMap(), elements: new Map(),
         dependsOn: [], dependsOnMissing: false, scopes: new Set(), state: { status: "ready", value: null, records: [] }, sent: null,
+        kept: null,
       };
+      watch.kept = kept.get(keptKey(watch)) ?? null;
       // Read and serialize before registering: a value that is not JSON data fails the open and leaves no watch behind.
       const reads = !when || matchesGuard(location.href, when);
       if (reads) {
@@ -469,6 +505,8 @@ export function createWatches(host: WatchHost): Watches {
       measure();
     },
     close(id) {
+      const watch = watches.get(id);
+      if (watch) keep(watch);
       watches.delete(id);
       if (watches.size === 0) stopObserving();
       else observeScopes();
@@ -486,6 +524,7 @@ export function createWatches(host: WatchHost): Watches {
     },
     closeAll() {
       watches.clear();
+      kept.clear();
       stopObserving();
     },
     record(id, key) {
@@ -503,11 +542,14 @@ export function createWatches(host: WatchHost): Watches {
       flush();
     },
     viewChanged() {
+      for (const watch of watches.values()) keep(watch);
+      viewKey = entryKey(location.href);
       for (const watch of watches.values()) {
         watch.snapshot = true;
         watch.sent = null;
         watch.elements = new Map();
         watch.state = { status: "ready", value: null, records: [] };
+        watch.kept = kept.get(keptKey(watch)) ?? null;
       }
       // The website renders the new route after it changes the URL; read once the DOM settles.
       batch.cancel();

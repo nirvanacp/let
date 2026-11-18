@@ -172,7 +172,7 @@ A website the applet covers does not need to draw, so Genesis runs it at one of 
 
 ### Virtualized lists
 
-Some websites keep only the visible rows in the DOM. Mark such a list `virtualized: true`: records whose elements leave the DOM stay in the list with `present: false` in their data, so the list grows as the user scrolls the website instead of losing rows. A record with `present: false` cannot be the target of input until it is back on the page; scroll it into view first.
+Some websites keep only the visible rows in the DOM. Mark such a list `virtualized: true`: records whose elements leave the DOM stay in the list with `present: false` in their data, so the list grows as the user scrolls the website instead of losing rows. A record with `present: false` cannot be the target of input until it is back on the page; scroll it into view first. When the website returns to a view in the same document, as a single-page app does on Back, it renders only the rows around its scroll position. The list then continues from the records it had in that view, as long as one of those rows is among them, so a screen keeps its length and scroll position. A new document starts the list over.
 
 ### Large lists
 
