@@ -93,7 +93,7 @@ When a context starts showing the website, the shell reveals that context's page
 - A link to a page the applet does not customize opens the website in the same session, with the same history. Back goes to the previous entry, which shows the applet screen again if it has a route.
 - A link shared from another app shows the applet screen when it matches a route, like any other navigation, and the website otherwise (see [navigation](navigation.md#links-from-other-apps)).
 - A page that never becomes ready shows the website after 15 seconds. Fix the route's `ready` read rather than hiding this.
-- While the website or a window it opened covers the applet, Genesis does not draw the applet's page. Its document is hidden (`document.visibilityState` is `hidden`), so animations and `requestAnimationFrame` pause; scripts, messages and timers keep running. The page draws again when the applet's screen returns.
+- While the website or a window it opened covers the applet, Genesis does not draw the applet's page. Its document is hidden (`document.visibilityState` is `hidden`), so animations and `requestAnimationFrame` pause; scripts and messages keep running, and timers run at most about once a second. A script animation (`element.animate`) that starts or is still running when the page is hidden never ends by itself, so end it with `finish()`, as the `Stage` in the [UI kit](ui-kit.md) does. The page draws again when the applet's screen returns.
 
 ## Motion
 
