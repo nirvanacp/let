@@ -168,7 +168,7 @@ A website the applet covers does not need to draw, so Genesis runs it at one of 
 - Page module code must not depend on `requestAnimationFrame`, `IntersectionObserver`, `document.hidden` or short timers outside a call: a resting page does not run them on time.
 - A covered website does not load its images, on the WebView engine. Image URLs are still in the DOM, so readers return them and the applet's screens load them. Showing the website loads its images. A page module must never read an image's size, pixels or load state (`naturalWidth`, `complete`, `onload`, a canvas): on a covered page those never arrive.
 - The host reopens every subscribed watch in each new page of the context. A page module never opens or reopens watches itself.
-- For work the page does alone, such as playing music, hold it: `const release = context.hold()` keeps it running until `release()`, and `useHold(active)` does the same from a component. `hold("awake")` is full speed for at most 30 seconds. See the [SDK reference](sdk-reference.md#holds).
+- For work the page does alone, such as playing music, hold it: `const release = context.hold()` keeps it running until `release()`, and `useHold(active)` does the same from a component. `hold("awake")` is full speed for at most 30 seconds. An applet left in the background for more than 30 seconds starts again when the user returns; while it holds a page it does not, so the music keeps playing. See the [SDK reference](sdk-reference.md#holds).
 
 ### Virtualized lists
 
