@@ -149,7 +149,7 @@ export type ForegroundMethod =
   | "session.save"
   | "back.handled" | "back.leave"
   | "page.call" | "page.cancel"
-  | "watch.subscribe" | "watch.unsubscribe"
+  | "watch.subscribe" | "watch.unsubscribe" | "store.forget"
   | "context.grant" | "context.hold"
   | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable"
   | "debug.log";
@@ -368,6 +368,16 @@ export interface WatchSubscribeParams {
   id: string;
   spec: ReadSpec;
   when?: UrlGuard[];
+  /** The host also keeps the watch's last value on the phone, for the next start of the applet. */
+  persist?: boolean;
+}
+
+/**
+ * Params of the foreground method `store.forget`: the host forgets the watch values it kept, in
+ * memory and on the phone, of `context` or of every context. Answers `{}`.
+ */
+export interface StoreForgetParams {
+  context?: string;
 }
 
 /** Params of the foreground method `watch.unsubscribe`: the host closes the page's watch. */
