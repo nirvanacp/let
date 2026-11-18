@@ -45,7 +45,7 @@ Show neutral, destination-shaped placeholders while a page loads: avatar and tex
 
 One skeleton per destination. A list, a grid, a detail, a profile and a search results page each get their own, with the real row height, media ratio and header, so nothing moves when the content arrives. A search screen whose results are a grid gets a grid skeleton.
 
-Build skeletons from the [UI kit](ui-kit.md#states)'s `.sk` shapes. Only `.sk` paints the placeholder and runs the shimmer; shape classes set size and radius only. A rule with a more specific selector that sets `background` or `animation` on a shape silently stops its shimmer, and a still skeleton looks frozen. Check on the device that every skeleton moves, and that it holds still under reduced motion.
+Build skeletons from the [UI kit](ui-kit.md#states)'s `.sk` shapes. The shimmer is a pseudo-element moved with `transform`, never an animated `background-position`, so it costs no repaint. Only `.sk` paints the placeholder and runs the shimmer; shape classes set size and radius only. A rule with a more specific selector that sets `background` or `animation` on a shape silently stops its shimmer, and a still skeleton looks frozen. Check on the device that every skeleton moves, and that it holds still under reduced motion.
 
 Keep existing content visible during refresh and show placeholders only where content is missing. Never cover an error, a sign-in prompt, an empty result or a draft with a skeleton.
 

@@ -20,6 +20,10 @@ The shell draws the floating Genesis menu button, the website bar and the launch
 
 Use only public SDK imports (`@let/sdk`, `@let/sdk/page`, `@let/sdk/router`, `@let/sdk/react`) and follow [patterns](guides/patterns.md). Keep loading, empty, sign-in, unsupported and real failure visibly different. Preserve record keys, drafts and the authoritative store for each record type as described in [services and data](guides/services-and-data.md). Build a servelet the app needs with [../servelets/AGENTS.md](../servelets/AGENTS.md). Never start backend services unless the user asks.
 
+### Speed and the debug log
+
+Genesis keeps each watch's last value and shows it at once as `stale`; render from it, show a skeleton only while a watch is `loading`, and never copy website data into storage or a servelet as a cache. Use `VirtualList` for lists over 50 rows, keep pressed states and shimmer to `transform` and `opacity`, and keep `check` free of size warnings. Verify with the applet's debug log on, and never put user content in `genesis.debug` fields. See [patterns](guides/patterns.md#performance), [presentation](guides/presentation.md#loaders-and-skeletons) and [verification](guides/verification.md#diagnosing). Protocol 2 changed how watches reach the UI: an applet built with an older SDK shows "Needs update" until it is rebuilt with the current one.
+
 ## Applet versions in the Genesis repository
 
 This section applies only to Genesis developers changing applets inside the Genesis repository, where the root `AGENTS.md` controls every version. Anywhere else, such as a portable kit or an applet repository outside Genesis, ignore this section and raise versions as [publishing](guides/publishing.md) describes.

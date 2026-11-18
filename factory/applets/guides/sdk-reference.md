@@ -93,6 +93,7 @@ genesis.ready();
 | `ready()` | Reports the first layout. The shell then shows the UI. |
 | `onResume`, `onSuspend`, `onRetired` | The applet came back, is going to the background, or this UI was closed. Each returns its unsubscribe function. |
 | `retired` | `true` once the UI was closed. |
+| `debug(ev, d?)` | Records `app.<ev>` in the applet's debug log while the user has the log on, and does nothing otherwise. `d` holds names, counts, durations and codes, never page text, stored data or typed text. |
 
 ### Contexts
 
@@ -155,6 +156,10 @@ if (result.outcome !== "observed") console.warn(result.code, result.message);
 | `WatchStore` | interface | `get`, `subscribe`, `emit`, `navigated`, `gone` and the other entry points of a stream. |
 | `EmitResult` | `"applied" \| "ignored" \| "resync"` | What `WatchStore.emit` did with a message. |
 | `emptyWatchValue` | `emptyWatchValue(): WatchValue` | The `loading` value before the first snapshot. |
+| `watchStatus` | `watchStatus(value: WatchValue): DataStatus` | The one state a screen shows for a watch value. |
+| `DataStatus` | `"empty" \| "loading" \| "fresh" \| "stale" \| "failed"` | `fresh`: data the page just read. `stale`: data shown while the page reads again, or kept from an earlier visit. `loading`: no data yet. `failed`: no data and an error. `empty`: the page read and has nothing, or the watch is idle. |
+
+The client applies the watch updates that arrive in one frame together, so a screen renders once per frame, and it compares a large snapshot in slices that let input run between them.
 
 ### Locators and fields
 
@@ -273,7 +278,7 @@ The router helper keeps the Genesis presentation rules in code. Per context it d
 | Export | Signature | Purpose |
 | --- | --- | --- |
 | `createRouter` | `createRouter(genesis: Genesis, options: RouterOptions): Router` | Starts the router over a connected client. |
-| `RouterOptions` | `{ routes, screens?, account?, decide? }` | The route table, the overlay screen ids, how to tell the signed-in state (`{ signedIn: ReadSpec, signInUrl?(url) }`), and an optional replacement for the presentation rules. |
+| `RouterOptions` | `{ routes, screens?, account?, decide?, viewTransitions? }` | The route table, the overlay screen ids, how to tell the signed-in state (`{ signedIn: ReadSpec, signInUrl?(url) }`), an optional replacement for the presentation rules, and `viewTransitions: true` to cross-fade screen changes with the View Transitions API. Off by default; it never runs under reduced motion or while the website shows. Leave it off when the applet animates screens itself. |
 | `RouterRoute` | `{ id, pattern, query?, screen?, context?, ready?, requiresAccount?, website?, onError? }` | One route. The first route whose pattern and query keys match a URL wins. `ready` is a read whose truthy value means the page is ready. `screen` defaults to the route id. |
 | `Router` | interface | `state`, `version`, `subscribe`, `screen()`, `status(contextId?)`, `presentation(contextId?)`, `revealed()`, `navigate`, `select`, `back`, `reload`, `viewWebsite`, `done`, `setLeaveGuard`, `onConfirmLeave`, `onScrollToTop`, `onDone` and `destroy`. |
 | `NavigateTarget` | `{ url, context?, mode? }` or `{ screen, params?, mode? }` | A website URL in a context, or an overlay screen (`push`, `replace` or `root`). |
@@ -311,6 +316,7 @@ router.subscribe(() => console.log(router.screen()?.id, router.status().status))
 | `useGenesis` | `useGenesis(): Genesis` | The connected client. |
 | `useContextState` | `useContextState(contextId?): ContextState` | A context's state. |
 | `useWatch` | `useWatch(id, spec, { when?, persist?, context? }): WatchValue` | Opens a watch while the component is mounted. An equal `id` and specification share one watch. |
+| `useWatchStatus` | `useWatchStatus(id, spec, { when?, persist?, context? }): DataStatus` | `useWatch` reduced to its [`DataStatus`](#watch-values), for a component that only picks the state to show. |
 | `useRecord` | `useRecord(watchId, key, contextId?)` | One record of a list watch that a `useWatch` in the same provider has open. It re-renders only when that record changes. |
 | `useCommand` | `useCommand(name, contextId?)` | Returns `(args?, options?: CommandOptions) => Promise<ActionResult & { value? }>` for a page module command. The promise never rejects. |
 | `CommandOptions` | `{ target?, expect?, navigates?, timeoutMs? }` | Options of a command call. |
@@ -325,9 +331,10 @@ router.subscribe(() => console.log(router.screen()?.id, router.status().status))
 | `useHold` | `useHold(active, { context?, level? }): void` | Holds a context's covered website while `active` is true, the active context and `"running"` by default; see [Holds](#holds). |
 | `useScrollMemory` | `useScrollMemory()` | A ref callback that keeps a scroll container's position per screen. |
 | `ScrollMemory` | `<ScrollMemory {...divProps}>` | A `div` with `useScrollMemory`. |
+| `VirtualList` | `<VirtualList keys estimateHeight renderItem overscan? className? />` | Renders only the rows near the visible part of a long list. `keys` are the row keys in order (a list watch's `order`), `estimateHeight` the usual row height in pixels, `renderItem(key)` one row, and `overscan` the rows kept beyond each edge (8). It scrolls with its nearest scrolling ancestor, such as a `ScrollMemory`, or the page, and measures each row once drawn. |
 | `useAppResume` | `useAppResume(callback)` | Runs on resume from the background and, with the router, after Done on the website. |
 
-It also re-exports `createRouter` and the types `CurrentScreen`, `NavigateTarget`, `Router`, `RouterOptions`, `RouterRoute`, `RouteStatus`, `ContextHandle`, `ContextState`, `Expect`, `PendingInput`, `Watch`, `WatchOptions`, `Genesis` and `WatchValue`. Hooks that take `contextId` use the router's active context by default, or the first context without a router.
+It also re-exports `createRouter`, `watchStatus` and the types `DataStatus`, `CurrentScreen`, `NavigateTarget`, `Router`, `RouterOptions`, `RouterRoute`, `RouteStatus`, `ContextHandle`, `ContextState`, `Expect`, `PendingInput`, `Watch`, `WatchOptions`, `Genesis` and `WatchValue`. Hooks that take `contextId` use the router's active context by default, or the first context without a router.
 
 ```tsx
 import { mount, useCommand, usePending, useRouter, useWatch } from "@let/sdk/react";
@@ -467,4 +474,4 @@ Every part checks the others before it runs:
 | Page control API (`adapterApi`) | 1 |
 | SDK and tools | 0.0.0 |
 
-`check` and `build` compare `applet.json` and the `@let/sdk` dependency with the tools and fail with `APPLET_INCOMPATIBLE`, listing each `field applet → current`. Update the applet to the current SDK and run `check` again. A bundle records its values in `bundle.json`. Genesis refuses to open an applet built for another version and marks it in the launcher as "Needs update" or "Needs a newer Genesis". `dev install` and `dev status` report the same mismatch. `connect` rejects with `PROTOCOL_MISMATCH` when the UI was built for another protocol.
+`check` and `build` compare `applet.json` and the `@let/sdk` dependency with the tools and fail with `APPLET_INCOMPATIBLE`, listing each `field applet → current`. Update the applet to the current SDK and run `check` again. A bundle records its values in `bundle.json`. Genesis refuses to open an applet built for another version and marks it in the launcher as "Needs update" or "Needs a newer Genesis". `dev install` and `dev status` report the same mismatch. `connect` rejects with `PROTOCOL_MISMATCH` when the UI was built for another protocol. Protocol 2 changed how watches reach the UI, so an applet built against an SDK that speaks protocol 1 shows "Needs update" until it is rebuilt with the current SDK and installed again.

@@ -33,6 +33,8 @@ Choose the motion from where the two screens sit, never from which button was ta
 
 Under right-to-left layouts, mirror the horizontal directions.
 
+An applet with the UI kit's stage leaves the router's `viewTransitions` option off, because the stage already runs these motions. A small applet without a stage can pass `viewTransitions: true` to get a short cross-fade on every screen change; the router skips it under reduced motion.
+
 ### Where a screen sits
 
 With the router helper, `useRouter().screen.key` is `${contextId}:${index}` for a context screen; a higher index is forward. Overlay screens have no index, so carry the last context index you saw and use the overlay count as depth. Mark tab roots and the drawer yourself. A screen whose content depends on a view inside the page (a list and its search mode, for example) can add that view to its identity so the switch animates.
@@ -70,7 +72,7 @@ Sheets also follow a drag on their handle: translate the sheet with the finger, 
 
 ## Controls
 
-- **Pressed state.** Rows and list buttons get a state layer (`background: var(--press)`) on `:active`. Buttons, chips and pills scale to about 0.97, icon buttons to about 0.92, floating buttons to about 0.94, with `--dur-short` and `--ease-out`.
+- **Pressed state.** Rows and list buttons get a state layer on `:active`: a pseudo-element filled with `var(--press)` whose opacity goes to 1. Press feedback animates only `transform` and `opacity`, never `background`, `box-shadow` or size, so the compositor runs it without a repaint. Buttons, chips and pills scale to about 0.97, icon buttons to about 0.92, floating buttons to about 0.94, with `--dur-short` and `--ease-out`.
 - **Popovers and menus** grow from the corner nearest their trigger (`transform-origin`), from 90% scale and transparent, in about 180 ms. They close at once on choice, outside tap or Back.
 - **Tabs.** The selected tab's indicator pill grows behind its icon. The tab bar slides up when it appears with a section root and is absent on pushed screens. Reselecting the current tab scrolls to the top smoothly.
 - **Badges and counts** pop with `--ease-spring` when their value changes: key the badge element by its count so the animation replays.

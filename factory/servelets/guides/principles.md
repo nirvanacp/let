@@ -47,5 +47,5 @@ A servelet runs only during a request, on one worker thread, through an interpre
 ## What stays out
 
 - No secrets, tokens or addresses in source or `servelet.json`. A servelet has no network to use them on.
-- No data the website already owns. Store the applet's own records keyed by the website's stable ids, and let the applet read the rest from the page.
+- No data the website already owns, not even as a cache for faster screens: Genesis keeps the applet's last watch values itself. Store the applet's own records keyed by the website's stable ids, and let the applet read the rest from the page.
 - No speculative routes, settings or migrations the user did not ask for.

@@ -231,6 +231,17 @@ useHold(playing.value === true, { context: "primary" });
 
 A `running` page draws nothing, so this suits sound. Video the user should see belongs in the revealed website or in the site's fullscreen player above.
 
+Where media plays depends on what the website gives:
+
+| Media | Where it plays |
+| --- | --- |
+| Images | In the applet's screens, as `<img>` with the URL a reader returns. A covered website skips loading its own images; showing it loads them. |
+| Video or audio with a direct file URL | In the applet's screens, as `<video src>` or `<audio src>`. |
+| Stream-only or DRM video | In the website: reveal it with a "Play on the website" control. |
+| Audio the website keeps playing | In the covered website, under a `running` hold as above. |
+
+The applet's screens run in their own WebView profile and carry none of the website's cookies. A media URL that needs the signed-in session does not load in the applet; play it in the website.
+
 ## Share
 
 Share the page's canonical address, not the applet's:

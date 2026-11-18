@@ -86,7 +86,13 @@ Wrap storage and service calls in one module, `src/library.ts`, that screens cal
 A covered website rests unless the applet is using it: Genesis pauses its drawing and timers, and every call, input and navigation wakes it first (see [how a covered page runs](page-control.md#how-a-covered-page-runs)). The applet's part is to leave it resting:
 
 - Never keep a page busy to "keep it warm". Do not poll with `read`, and do not run a timer that calls the page; records arrive through watches when the page changes.
-- Bound every list in the reader's selector and with `limit`; a page is at most 192 KiB of JSON. Render a long list with windowing or in pages, not all at once.
+- Bound every list in the reader's selector and with `limit`; a page is at most 192 KiB of JSON. Render a list over 50 rows with `VirtualList` from `@let/sdk/react`, or in pages, not all at once.
 - Memoize rows by key, and select a single record with `useRecord` so that one change re-renders one row.
-- Keep images lazy and sized.
+- Keep images lazy and sized: `width`, `height`, `loading="lazy"` and `decoding="async"` on every `<img>`.
 - Hold a page (`useHold`) only for work it does alone, such as playing music, and release the hold when that work ends.
+
+The applet's screens run in their own renderer, apart from the websites, so a busy website does not stall a tap on the applet. The applet's part:
+
+- Render stale first. Genesis keeps each watch's last value and shows it at once, as `stale`, while the page reads again. Draw the screen from that value; show a skeleton only when `watchStatus` is `loading` (see [presentation](presentation.md#loaders-and-skeletons)).
+- Keep event handlers short. Work that takes more than about 50 ms, such as sorting or filtering hundreds of records, runs in slices with `await scheduler.yield()` (or `setTimeout(0)` where it is missing) between them, so taps still land.
+- Keep the bundle small. `genesis-applet check` and `build` warn when the UI's JavaScript is over 350 KiB gzip or the page script over 100 KiB gzip. A warning does not fail the build, but a clean applet has none.

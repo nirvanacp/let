@@ -19,7 +19,11 @@ Check the code before the device, so the device time goes to what only the devic
 | Busy feedback | `grep -rn "useCommand\|useInput\|reload(" src` — each tapped call runs through `useBusy` or shows its ongoing state and an outcome |
 | Website cue | `grep -rn "viewWebsite" src` — each control carries the cue or says "View on website" |
 | Fallback text | `grep -rn "no subject\|?? 0\|No results" src` — each is rendered only when the page is ready and not stale |
-| Skeletons | One per destination; only one class paints and animates the shimmer |
+| Skeletons | One per destination; only one class paints and animates the shimmer, on a pseudo-element with `transform`; shown only while the watch is `loading` (`useWatchStatus`), never over kept data |
+| Press and motion cost | `grep -rn "transition:\|animation:" src`: pressed states and shimmer change only `transform` and `opacity` |
+| Long lists and images | Lists over 50 rows use `VirtualList`; each `<img>` has `width`, `height`, `loading="lazy"` and `decoding="async"` |
+| Kept data | First-screen watches set `persist`; sign-out calls `genesis.forgetCached()`; no website data copied into storage or a servelet as a cache |
+| Budgets | `npm run check` and `npm run build` print no size warnings |
 
 ## 2. Coverage audit on the device
 
@@ -37,12 +41,13 @@ Record the screen during each probe and step through the recording frame by fram
 - Back quickly through a deep stack, and with the system gesture;
 - turn the network off, then tap Retry, Refresh, a toggle and a command;
 - a refused or failing service call, when the applet has a backend;
-- reduced motion, dark theme, 200% text and the narrowest width on each changed screen.
+- reduced motion, dark theme, 200% text and the narrowest width on each changed screen;
+- with the applet's debug log on, the same journeys, then read the log for errors and `frame.long` lines during taps ([verification](../../guides/verification.md#diagnosing)).
 
 ## 4. Fix in order of impact
 
 1. The website where a screen belongs, and states that never end (endless skeleton, stuck spinner).
-2. Taps that show nothing: missing pressed states, busy states and outcomes.
+2. Taps that show nothing or land late: missing pressed states, busy states and outcomes, and long frames during taps.
 3. Wrong states: fallbacks shown as content, empty shown while loading, another destination's skeleton.
 4. Motion: missing direction, leftover copies, animations that run under reduced motion.
 5. Visual detail: layout shift, truncation, contrast, spacing against the product's app.

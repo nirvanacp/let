@@ -128,6 +128,10 @@ Params and results use the field names shown.
 | `back.leave` | `{}` | `{}`. Leaves the applet. |
 | `page.call` | `{ context, generation, op, args, timeoutMs? }` | The operation's value (see [Page operations](#page-operations)). |
 | `page.cancel` | `{ context, callId? }` | `{}` |
+| `watch.subscribe` | `{ context, id, spec, when?, persist? }` | `{}` at once. The host opens the watch in every page of the context that binds while the subscription lasts (see [Watches](#watches)). |
+| `watch.unsubscribe` | `{ context, id }` | `{}`. Ends the subscription and closes the page's watch. |
+| `store.forget` | `{ context? }` | `{}`. Forgets the watch values the host kept, in memory and on the phone, of one context or every context. |
+| `debug.log` | `{ entries }` | `{}`. Writes events to the applet's debug log (see [Debug log](#debug-log)). |
 | `context.grant` | `{ id, grant }` | `{ granted: true, expiresInMs }`. Lets a hidden context's page use one website feature once (see [Grants](#grants)). |
 | `context.hold` | `{ id, level }` | `{}`. Keeps a covered context's page going while the foreground needs it (see [Activity](#activity)). |
 | `files.pick` | `{ accept?, multiple? }` | `{ files: [{ id, name, type, size }] }`, empty when the user cancels (see [User actions](#user-actions)). |
@@ -147,7 +151,7 @@ Rules the host applies:
 
 ## Context methods
 
-Only a context document sends these. All but `page.share` are about calls the host gave it.
+Only a context document sends these. All but `page.share` and `debug.log` are about calls the host gave it.
 
 | Method | Params | Result |
 | --- | --- | --- |
@@ -157,6 +161,7 @@ Only a context document sends these. All but `page.share` are about calls the ho
 | `page.input` | `{ callId, events }` | `{}` once the shell dispatched the events. |
 | `page.files` | `{ callId, ids }` | `{ count }` once the shell posted the files to the page (see [User actions](#user-actions)). |
 | `page.share` | `{ title?, text?, url?, active }` | `{ shown: true }`. The website's own `navigator.share` (see [User actions](#user-actions)). |
+| `debug.log` | `{ entries }` | `{}`. The page agent's events for the applet's debug log. |
 
 - `page.result` and `page.progress` about a call that is not this document's, or that has already ended, are accepted and ignored. `page.result` with `ok: false` and no `error` ends the call with `INVALID_ARGUMENT`. The page agent checks a value before it answers: a value that is not JSON data (a BigInt, a cycle) answers `INVALID_ARGUMENT`, and one over `limits.pageMaxBytes` answers `PAGE_TOO_LARGE`.
 - `page.progress` marks the call `dispatched`, and `navigating` when that is the state. The host forwards it to the foreground as the event `page.progress`.
@@ -182,7 +187,7 @@ Events the foreground receives:
 | `context.grantEnded` | `{ id, grant, used }`. A grant from `context.grant` was used, or ended unused (see [Grants](#grants)). |
 | `back` | `{}`. The user pressed Back; answer with `back.handled` or `back.leave`. |
 | `retired` | `{}`. The document will get no more answers. |
-| `page.emit` | `{ context, generation, stream, kind, seq, view, url, data }` |
+| `page.emit` | `{ context, generation, stream, kind, seq, view, url, data, cached?, at? }` |
 | `page.progress` | `{ context, callId, state, completedSteps? }` |
 
 Events a context document receives:
@@ -325,6 +330,10 @@ The page agent reports `dispatched` before the first step that has an effect. Wh
 ## Watches
 
 A watch is a stream of `page.emit` messages that keeps the client's copy of a read up to date. The page agent observes the DOM, re-reads what changed, and sends the difference.
+
+The foreground does not open watches in pages itself. It sends `watch.subscribe` once, and the host opens the watch (`watch.open`) in each page of the context that binds, until `watch.unsubscribe`, a new foreground document or the applet's retirement. The same `id` with another `spec` or `when` answers `CONFLICT`, and an open that fails reaches the foreground as a `status` emit with `status: "error"`.
+
+The host keeps each subscribed watch's last value. When a page binds, the host first sends that value as a snapshot with `cached: true` and `at` (epoch milliseconds when it last changed), then the page's own messages follow. A cached snapshot carries no stream position. With `persist: true` the host also keeps the value on the phone for up to 7 days, for the next start of the applet; it erases kept values with `store.forget` and when the user clears the website's data.
 
 | Kind | Data | When |
 | --- | --- | --- |
@@ -554,6 +563,19 @@ A covered context's page does not draw, so the host runs it at one of three leve
 - Requests and events are the same at every level. A watch on a resting page delivers its changes up to about a second late.
 - `limits.activity` is true when the host rests covered pages and takes `context.hold`. It is absent in an older Genesis, where a covered page always runs and `context.hold` answers `UNKNOWN_METHOD`.
 
+## Debug log
+
+The user can turn an applet's debug log on in its info screen, under Troubleshooting. It turns off on its own after 7 days. While it is on, `bound.limits.debugLog` is true and every document sends its events in batches with `debug.log`:
+
+```json
+{ "type": "request", "documentId": "d4", "requestId": 61, "method": "debug.log", "params": { "entries": [{ "t": 1795000000000, "ev": "frame.long", "d": { "ms": 84 } }] } }
+```
+
+- An entry is `{ t, ev, d? }`: epoch milliseconds, an event name of at most 64 characters, and fields of names, counts, durations and error codes. Strings are cut to 300 characters. Never put page text, stored data, typed text, cookies or query strings in an entry.
+- One call writes at most 200 entries and 16 KiB; the rest are counted, not written.
+- The host and the shell add their own events, such as page calls, emits and `service.result` with each service request's duration and status. The host writes everything to JSON lines in the app's files directory, and the user shares the file from the same screen.
+- With the log off, `debug.log` is accepted and ignored.
+
 ## Error codes
 
 | Code | Meaning |
@@ -624,6 +646,7 @@ A covered context's page does not draw, so the host runs it at one of three leve
 | `grants` | True when the foreground can let a hidden page use one website feature once with `context.grant`. Absent in an older Genesis. |
 | `activity` | True when the host rests a covered context's page while it is unused and takes `context.hold`. Absent in an older Genesis. |
 | `inputBurst`, `inputRefillMs` | A context's input budget: input page calls at once (20), and milliseconds for one to come back (1000). Absent in an older Genesis, which has no budget. |
+| `debugLog` | True while the user has the applet's debug log on: the document sends its events with `debug.log`. Absent or false otherwise. |
 
 ## Versions
 

@@ -52,6 +52,18 @@ if (stories.order.length === 0) {
 }
 ```
 
+Each watch is in one of five data states, which `watchStatus(value)` and `useWatchStatus` return:
+
+| State | Meaning | The screen shows |
+| --- | --- | --- |
+| `loading` | No data yet, the page is reading | The skeleton |
+| `fresh` | Data the page just read | The content |
+| `stale` | Data kept from an earlier visit or entry, while the page reads again | The content, with the refreshing state of [stale pages](#stale-pages) |
+| `empty` | The page read and has nothing, or the watch is idle on this URL | The empty state |
+| `failed` | No data and an error | The error with Retry and the website |
+
+Genesis keeps each watch's last value across pages and, with `persist`, across starts, so most screens open `stale` and never show a skeleton.
+
 `status()` is the route's status for the active context, or for the context you name: `loading`, `ready`, `error`, `auth` or `unsupported`, with `stale`, `error`, `params` and `signedIn`. Between a context's document going away and the next one binding, it is `loading`. Treat empty as a ready page with an empty list, never as "no records yet".
 
 Unknown is not empty either. While the page is loading, a field the reader has not found is missing because the page has not drawn it yet. Show the skeleton for it, and render a fallback such as "(no subject)" or a zero count only once the page is ready and not stale and the field is still missing:

@@ -24,7 +24,7 @@ The scaffold contains:
 | `src/page.ts` | The page module: one list reader `links` |
 | `src/routes.ts` | The router's table: one route `home` at `/` to screen `home` |
 | `src/main.tsx` (react) or `src/main.ts` (vanilla) | The UI: the router, the `home` screen with one watch, and one click |
-| `src/theme.css` | Light and dark tokens, and the space for the menu button |
+| `src/theme.css` | Light and dark tokens, the space for the menu button, pressed states that change only opacity, and a short cross-fade for the router's `viewTransitions` |
 | `.specs/`, `.changelog/` | Applet records, already started; the current spec lists the compatibility values |
 | `let/` | This kit |
 | `AGENTS.md`, `README.md` | Pointers to the kit and the records |
@@ -87,7 +87,7 @@ function Home() {
 }
 ```
 
-[Page modules](page-modules.md) covers readers, keys and extents. [Page control](page-control.md) covers the read specifications a watch can take without a page module.
+A real screen renders from the watch's data state (`useWatchStatus` or `watchStatus`), shows a skeleton only while it is `loading`, and renders a list over 50 rows with `VirtualList` ([presentation](presentation.md#loaders-and-skeletons), [SDK reference](sdk-reference.md#letsdkreact)). [Page modules](page-modules.md) covers readers, keys and extents. [Page control](page-control.md) covers the read specifications a watch can take without a page module.
 
 ## The first input
 
@@ -126,7 +126,7 @@ npx genesis-applet dev install . --device emulator-5554
 npx genesis-applet dev status my-applet --device emulator-5554
 ```
 
-`check` compares the applet with the tools and fails with `APPLET_INCOMPATIBLE` on a difference. It then validates the manifest against schema 6, type-checks the project (the `build.check` command, or `tsc` when there is a `tsconfig.json`), and bundles and imports the page module that `build.page` names. Importing runs the applet's code, so check only applets you trust. The page module must not import `@let/sdk/react`.
+`check` compares the applet with the tools and fails with `APPLET_INCOMPATIBLE` on a difference. It then validates the manifest against schema 6, type-checks the project (the `build.check` command, or `tsc` when there is a `tsconfig.json`), and bundles and imports the page module that `build.page` names. Importing runs the applet's code, so check only applets you trust. The page module must not import `@let/sdk/react`. `check` and `build` warn, without failing, when the page script is over 100 KiB gzip or the UI's JavaScript is over 350 KiB gzip.
 
 `build` bundles the UI and the page module into `dist/`. `--debug` sets the constant `__GENESIS_DEBUG__` to `true` instead of `false` in the code esbuild bundles (the page script, and the UI when `build.foreground` names an `entry`), so code guarded by `if (__GENESIS_DEBUG__)` stays in the build. A project's own UI build command does not see it. `dev install` takes the applet directory (it uses `dist/`) or a build output directory. It does not build, so run `build` first. It copies the bundle to the debug app, which applies it without restarting Genesis, and reports the accepted revision or the rejection reason, including an incompatible SDK. `dev status` lists the installed applets with their status and, given an id, its last install receipt. Every command accepts `--json`; device commands accept `--adb <path>` and `--application <id>`.
 

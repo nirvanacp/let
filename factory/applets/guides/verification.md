@@ -27,7 +27,7 @@ npm run check
 npm run build
 ```
 
-`check` first compares the applet with the tools: `applet.json`'s schema version, the `@let/sdk` dependency and the installed SDK. A difference fails with `APPLET_INCOMPATIBLE` and lists each `field applet → current`; update the applet to the current SDK and run `check` again. It then validates the manifest and `build`, type-checks the code (the `build.check` command, or `tsc --noEmit`), imports the page module in Node and bundles it. Importing runs your code, so check only applets you trust. Read its warnings: an async reader fails on the device.
+`check` first compares the applet with the tools: `applet.json`'s schema version, the `@let/sdk` dependency and the installed SDK. A difference fails with `APPLET_INCOMPATIBLE` and lists each `field applet → current`; update the applet to the current SDK and run `check` again. It then validates the manifest and `build`, type-checks the code (the `build.check` command, or `tsc --noEmit`), imports the page module in Node and bundles it. Importing runs your code, so check only applets you trust. Read its warnings: an async reader fails on the device. `check` and `build` also warn when the page script is over 100 KiB gzip or the UI's JavaScript is over 350 KiB gzip; a warning does not fail, but fix it before a release.
 
 For the backend, run its own syntax or type check. Review the diff for selectors that depend on visual class names, unbounded lists, reads outside an item's extent, non-unique keys, missing states and secrets.
 
@@ -79,7 +79,7 @@ These check the [native feel](native-feel.md) bar. Fast flashes last one or two 
 
 | Scenario | Expected |
 | --- | --- |
-| Cold start, signed in | The start screen's skeleton from the first frame, then the content; no website frame |
+| Cold start, signed in | The start screen's kept data (with `persist`) or its skeleton from the first frame, then the content; no website frame |
 | Cold start, signed out | The site's sign-in at once, not a skeleton that waits out the deadline; Done leaves or returns as [presentation](presentation.md#the-switch-to-the-website) says |
 | Follow each core journey's links and redirects | Every page shows an applet screen, or is listed in the current spec as a website page on purpose |
 | Open a detail, profile or result | The destination's own screen and skeleton in the next frame; not the previous screen, and not the website |
@@ -91,6 +91,7 @@ These check the [native feel](native-feel.md) bar. Fast flashes last one or two 
 | Idle for 10 s on the main screen | The device stays cool and scrolling stays smooth afterwards |
 | A change the website makes on its own, such as a new message or a count | It appears on the applet screen within 2 s |
 | Play media, then browse the applet for a minute | It keeps playing, and the applet's player state follows each track |
+| Leave the applet for a minute, then return; and go Back to a screen seen before | The last data shows at once as stale, with no skeleton, then updates in place |
 
 ## Diagnosing
 
@@ -119,6 +120,8 @@ Start from the evidence: what the screen shows, the route's status and error cod
 | "(no subject)", "0" or "No results" flashes before content | A fallback rendered from an incomplete read; keep the skeleton until the page is ready and not stale |
 | A tap shows nothing | No pressed state, or the work failed faster than a frame; add a pressed state and a minimum busy time ([motion](motion.md#feedback-after-an-action)) |
 | `PROTOCOL_MISMATCH`, `APPLET_INCOMPATIBLE`, "Needs update" | The applet was built for another SDK; rebuild with the current one |
+
+For timing and errors, turn on the applet's debug log in Genesis's applet info screen (Troubleshooting, Debug log), walk the journeys, then read it on a debug build with `adb -s <serial> exec-out run-as app.nirvana.genesis cat files/logs/<applet-id>/log-0.jsonl`. Each line is one event: `error` and `rejection` from the UI or a page, `frame.long` for frames that blocked input, `watch.first` with the time to a watch's first value, `input` with each input's duration and outcome, `service.result` with each service request's duration and status, and the applet's own `app.*` events from `genesis.debug`. Look for errors, long frames during taps and slow first values. In a Genesis checkout, `node tools/bench.mjs --device <serial> --applet <id> --scenario idle|cold|journey --seconds <n>` measures CPU, memory and the time to first data; run it before and after a change that could affect speed.
 
 To look at the page itself, open the context's page on a debug build of Genesis in Chrome's remote inspector (`chrome://inspect`), or in desktop Firefox's `about:debugging` when the applet runs on GeckoView. Verify a journey on the engine the user chose; a page module change that reads differently on the other engine is a bug in the module (see [Website engines](page-modules.md#website-engines)). Fix the owner, then rerun the journey that failed and the journeys next to it.
 

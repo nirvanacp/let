@@ -24,16 +24,16 @@ Read the latest request, local instructions, `.specs/current.md`, relevant decis
 | requirement-user-tap-actions | Requirement: picking files, saving, sharing, opening another app, enabling notifications and one-time grants start only from the handler of a user's tap on the applet UI, one per tap, never chained or automatic; features that need visible UI stay in the applet as [website features](website-features.md) describes | [User tap actions](#user-tap-actions) |
 | requirement-website-dialogs | Requirement: a website's `alert`, `confirm`, `prompt` or leave question reaches the user unchanged, as Genesis's own dialog, and is answered only by the user | [Website dialogs](#website-dialogs) |
 | requirement-protected-fields | Requirement: the applet never reads or enters passwords, hidden inputs, one-time codes or card data; the user types them on the website | [Protected fields](#protected-fields) |
-| requirement-data-integrity | Requirement: stable keys, one authoritative store per record type, revision checks, credentials outside the bundle, no blind retry of uncertain writes | [Services and data](services-and-data.md) |
+| requirement-data-integrity | Requirement: stable keys, one authoritative store per record type, revision checks, credentials outside the bundle, no blind retry of uncertain writes; website state stays in Genesis's watch store, never copied into applet storage or a servelet as a cache; sign-out calls `genesis.forgetCached()` | [Services and data](services-and-data.md) |
 | requirement-accessible-navigation | Authoring requirement: semantic labels, focus, readable contrast, scalable text, 48 dp touch targets and working Back | [Design](design.md) |
 | requirement-records | Authoring requirement: keep current intent, decisions and change outcomes in applet records | [Records](applet-records.md) |
 | requirement-honest-verification | Verification requirement: keep static, synthetic and live evidence apart; keep blocked journeys visible; no unrequested posts, messages, purchases or account changes | [Verification](verification.md) |
 | requirement-operator-startup | Workflow requirement: maintain backend start commands; start services only when the user asks | [Services and data](services-and-data.md#local-startup-and-ports) |
 | default-* | Initial UI and navigation choices and their compatible overrides | [Defaults](defaults.md), [native feel](native-feel.md), [UI kit](ui-kit.md), [motion](motion.md) |
 | practice-focused-modules | Best practice: separate page module readers and commands, data types, screens, repositories and backend calls; abstract only after real reuse | [Patterns](patterns.md) |
-| practice-bounded-work | Best practice: bounded lists, one subscription per concern, shared components and tokens | [Patterns](patterns.md), [design](design.md) |
+| practice-bounded-work | Best practice: bounded lists, one subscription per concern, shared components and tokens, `VirtualList` for lists over 50 rows, no `check` size warnings | [Patterns](patterns.md), [design](design.md) |
 | practice-small-dependencies | Best practice: the smallest useful dependency and capability set, without shrinking the requested scope | [Getting started](getting-started.md) |
-| practice-scoped-diagnosis | Best practice: inspect evidence, find the owning component, verify the changed journeys, keep records short and current | [Verification](verification.md) |
+| practice-scoped-diagnosis | Best practice: inspect evidence, find the owning component, verify the changed journeys, keep records short and current; `genesis.debug` fields carry names, counts, durations and codes, never user content | [Verification](verification.md) |
 
 ## Session projection
 

@@ -179,7 +179,7 @@ const pending = usePending().find(input => input.op === "invoke" && input.args.c
 const voted = pending ? (pending.args.args as { voted: boolean }).voted : story.voted;
 ```
 
-Do not keep a separate optimistic copy in React state that can disagree with the page. Keep the rest of the screen usable while an input runs.
+The pending input is display state only. The data always comes from the watch, which Genesis keeps in its store; never write the requested value into a watch's records, applet storage or a servelet. Do not keep a separate optimistic copy in React state that can disagree with the page. Keep the rest of the screen usable while an input runs.
 
 ## No retries
 
