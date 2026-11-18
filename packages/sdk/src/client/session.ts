@@ -227,7 +227,8 @@ export async function connect(options: ConnectOptions = {}): Promise<Genesis> {
 
 function createGenesis(session: Session): Genesis {
   const { manifest, appletId, revision, limits, compat } = session.bound;
-  startClientDebug(session);
+  const { website, onBack, leave } = createPresentation(session);
+  startClientDebug(session, () => website.state.shown !== null);
   if (debugLog.on) debugLog.add("bound", { revision, protocol: compat.protocol, contexts: manifest.contexts.length });
   const contexts = new Map<string, ContextControl>();
   for (const context of manifest.contexts) contexts.set(context.id, createContext(context.id, context.startUrl, session));
@@ -248,7 +249,6 @@ function createGenesis(session: Session): Genesis {
   };
 
   const saved = createSavedState(session);
-  const { website, onBack, leave } = createPresentation(session);
   session.on("resumed", () => {
     for (const context of contexts.values()) context.resumed();
     call(listeners.resume);
