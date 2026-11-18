@@ -5,7 +5,7 @@
 export const COMPAT = {
   manifestSchema: 6,     // applet.json shape
   bundleFormat: 3,       // bundle.json
-  protocol: 1,           // document ↔ host messages (hello, bound, requests, events)
+  protocol: 2,           // document ↔ host messages (hello, bound, requests, events)
   adapterApi: 1,         // defineAdapter, regions, actions, patch stream
   sessionState: 1,       // session.save payload
   importEnvelope: 1,     // the import file around a bundle
