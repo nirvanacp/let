@@ -53,6 +53,8 @@ which is bundled with esbuild and imported in Node, and for build the UI build
 (build.foreground.command, or esbuild from build.foreground.entry). This is not a
 sandbox; check only applets you trust.
 build --debug defines __GENESIS_DEBUG__ in the esbuild outputs.
+check and build warn, without failing, when the page script is over 100 KiB gzip or the
+UI's JavaScript is over 350 KiB gzip; check measures the UI of the last build in dist/.
 A local service ({ "runtime": "local", "servelet": "<id>" }) names a servelet: check runs
 let-servelet check on it and build adds servelets/<serviceId>/servelet.wasm and servelet.json
 to the bundle. Servelets are looked up in --servelets, then $LET_SERVELETS_DIR, then the

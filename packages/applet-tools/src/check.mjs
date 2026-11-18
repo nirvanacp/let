@@ -1,10 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { gzipSync } from 'node:zlib';
 import { build } from 'esbuild';
 import { checkServelet } from '@let/servelet-tools';
 import { containedFile, readApplet, requireValue, toolError } from './manifest.mjs';
@@ -93,16 +94,67 @@ async function importPageModule(base, page) {
   }
 }
 
-/** Builds the page script as the build does, to report browser bundling errors here. */
+/** Builds the page script as the build does, to report browser bundling errors here. Returns its bytes. */
 async function bundlePageScript(base, page) {
   try {
-    await build({
+    const result = await build({
       absWorkingDir: base, entryPoints: [PAGE_ENTRY], bundle: true, write: false, format: 'iife', platform: 'browser',
+      target: 'es2022', minify: true, legalComments: 'none',
       logLevel: 'silent', plugins: [pageEntry(base, page), noReactInPage], define: { __GENESIS_DEBUG__: 'false' },
     });
+    return Buffer.from(result.outputFiles[0].contents);
   } catch (error) {
     requireValue(false, `Page script: ${buildErrors(error)}`);
   }
+}
+
+/**
+ * Size budgets, in gzip bytes. The page script runs in every website page the applet opens, and
+ * the UI's JavaScript loads before its first screen. In November 2026 the largest bundled applet
+ * used about 120 KiB and 31 KiB, so an applet over these has grown well past its peers.
+ */
+export const FOREGROUND_JS_BUDGET = 350 * 1024;
+export const PAGE_SCRIPT_BUDGET = 100 * 1024;
+
+const kib = bytes => `${(bytes / 1024).toFixed(1)} KiB`;
+
+/**
+ * Warnings for bundle sizes over budget: `foreground` is the built UI's files by path (its `.js`
+ * and `.mjs` files count, compressed one by one), `page` the page script's bytes. Either may be
+ * null when it is not known.
+ */
+export function sizeWarnings({ foreground = null, page = null, from = '' }) {
+  const warnings = [];
+  if (foreground) {
+    let size = 0;
+    for (const [name, bytes] of foreground) if (['.js', '.mjs'].includes(path.extname(name))) size += gzipSync(bytes).length;
+    if (size > FOREGROUND_JS_BUDGET) {
+      warnings.push(`The UI's JavaScript${from} is ${kib(size)} gzip, over the ${kib(FOREGROUND_JS_BUDGET)} budget: split or drop large dependencies`);
+    }
+  }
+  if (page) {
+    const size = gzipSync(page).length;
+    if (size > PAGE_SCRIPT_BUDGET) {
+      warnings.push(`The page script is ${kib(size)} gzip, over the ${kib(PAGE_SCRIPT_BUDGET)} budget: it runs in every website page, so keep the page module small`);
+    }
+  }
+  return warnings;
+}
+
+/** The UI's JavaScript files of the applet's last build in `dist/`, by path, or null without one. */
+async function lastBuildForeground(base) {
+  const revision = path.join(base, 'dist', 'revision');
+  if (!existsSync(path.join(base, 'dist', '.genesis-applet-output'))) return null;
+  const files = new Map();
+  const walk = async (directory, prefix) => {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      const name = prefix + entry.name;
+      if (entry.isDirectory()) await walk(path.join(directory, entry.name), `${name}/`);
+      else if (entry.isFile() && name !== 'page.js' && ['.js', '.mjs'].includes(path.extname(name))) files.set(name, await readFile(path.join(directory, entry.name)));
+    }
+  };
+  try { await walk(revision, ''); } catch { return null; }
+  return files;
 }
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -328,9 +380,10 @@ async function checkLocalServices(manifest, services) {
  * Checks an applet: compatibility with these tools first, then the manifest and its `build`
  * section, the type check, and the page module named by `build.page`, which is bundled and
  * imported in Node and checked against the page module rules. Returns the applet with the
- * module's reader and command names (null without a page module) and the warnings.
+ * module's reader and command names (null without a page module) and the warnings, which include
+ * the size budgets: the page script's, and with `lastBuild` the UI's from the last build in `dist/` when there is one.
  */
-export async function checkApplet(directory, { servelets } = {}) {
+export async function checkApplet(directory, { servelets, lastBuild = true } = {}) {
   const compat = await requireCompatible(path.resolve(directory));
   const applet = await readApplet(directory, { servelets });
   const { base, manifest, build: config } = applet;
@@ -348,7 +401,9 @@ export async function checkApplet(directory, { servelets } = {}) {
     warnings = described.asyncReads.map(name => `Reader ${name}: a function is async; readers must return data synchronously`);
     await checkPageModuleFiles(base, files);
   }
-  await bundlePageScript(base, config.page);
+  const page = await bundlePageScript(base, config.page);
+  warnings.push(...sizeWarnings({ page }));
+  if (lastBuild) warnings.push(...sizeWarnings({ foreground: await lastBuildForeground(base), from: ' of the last build in dist/' }));
   const local = await checkLocalServices(manifest, applet.services);
   return { ...applet, module, warnings, local, compat: { applet: compat.applet, tools: TOOLS_TABLE } };
 }
