@@ -75,8 +75,11 @@ interface Watch {
 export interface Watches {
   open(id: string, spec: ReadSpec, when?: UrlGuard[]): void;
   close(id: string): void;
-  /** Emits a fresh snapshot of one watch, or of every watch. */
-  resync(id?: string): void;
+  /**
+   * Emits a fresh snapshot of one watch, or of every watch. With `kept`, the records the client
+   * has of this view from an earlier document, a virtualized list reads again and continues from them.
+   */
+  resync(id?: string, kept?: PageRecord[]): void;
   closeAll(): void;
   /** The element of one record of a list watch: `null` without such a watch, `undefined` when the record is not on the page. */
   record(id: string, key: string): Element | null | undefined;
@@ -99,7 +102,8 @@ export function createWatches(host: WatchHost): Watches {
   /**
    * The records of virtualized lists by watch and view. A website that comes back to a view, as
    * on Back, renders only the rows around its scroll position, so the list continues from the
-   * records it had there instead of starting over with those few rows.
+   * records it had there instead of starting over with those few rows. They end with the
+   * document; when Back loads a new one, the client sends its copy with `resync`.
    */
   const kept = new Map<string, PageRecord[]>();
   let viewKey = entryKey(location.href);
@@ -511,11 +515,17 @@ export function createWatches(host: WatchHost): Watches {
       if (watches.size === 0) stopObserving();
       else observeScopes();
     },
-    resync(id) {
+    resync(id, kept) {
       if (id !== undefined && !watches.has(id)) throw new PageError("NOT_FOUND", `No watch ${id} is open`);
       for (const watch of watches.values()) {
         if (id !== undefined && watch.id !== id) continue;
         watch.snapshot = true;
+        if (kept && id !== undefined && watch.compiled.kind === "list" && watch.compiled.virtualized) {
+          // Read from nothing, as in a new view, so the rows on the page decide whether the list continues.
+          watch.elements = new Map();
+          watch.state = { status: "ready", value: null, records: [] };
+          watch.kept = kept;
+        }
         // An idle watch says so again; the client may have lost the status.
         if (watch.idle) post(watch, "status", { idle: true });
       }

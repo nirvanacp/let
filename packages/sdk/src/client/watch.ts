@@ -50,6 +50,12 @@ export interface WatchStore {
   at(navigation: ContextNavigated): void;
   /** A UI opens the watch again: the data it kept is shown, marked stale, until the page's snapshot. */
   reopened(): void;
+  /**
+   * The list records kept of the history entry the context came back to in a new document, in
+   * order; null when there are none, and after the first call. The new page's virtualized list
+   * continues from them.
+   */
+  takeReturned(): { key: string; data: unknown }[] | null;
   /** Forgets every kept copy; with `current`, also the data shown now. */
   forget(current: boolean): void;
   /**
@@ -149,6 +155,8 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
   const history = new Map<number, Data>();
   /** The URL the current data belongs to. */
   let url: string | null = null;
+  /** The copy of the history entry a new document came back to, until `takeReturned`. */
+  let returned: Data | null = null;
   const listeners = new Set<() => void>();
   /** The records of a large snapshot, compared ahead of `emit` with `base`. */
   let prepared: { body: unknown; base: Readonly<Record<string, unknown>>; records: Record<string, unknown> } | null = null;
@@ -291,6 +299,7 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
         if (index >= navigation.size || (index === navigation.index && !sameUrl(keptUrl, navigation.url))) history.delete(index);
       }
       entry = { index: navigation.index, url: navigation.url };
+      returned = null;
       if (navigation.sameDocument) {
         // The agent sends a snapshot for the new view; until then the data belongs to the old one.
         if (!sameUrl(url, navigation.url)) restore(navigation);
@@ -302,6 +311,7 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
         set({ ...current, status: "loading", error: null, stale: hasData(current) });
       } else {
         restore(navigation);
+        returned = history.get(navigation.index) ?? null;
       }
     },
 
@@ -327,8 +337,16 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
       if (hasData(current)) set({ ...current, status: "loading", error: null, stale: true });
     },
 
+    takeReturned() {
+      const kept = returned;
+      returned = null;
+      if (!kept || kept.order.length === 0) return null;
+      return kept.order.map(key => ({ key, data: kept.records[key] }));
+    },
+
     forget(all) {
       history.clear();
+      returned = null;
       if (!all) return;
       url = null;
       set(emptyWatchValue());

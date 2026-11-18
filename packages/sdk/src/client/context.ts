@@ -569,6 +569,22 @@ export function createContext(id: string, startUrl: string, session: Session): C
       entry.subscribed = false;
       entry.store.failed({ code: (error?.code ?? "NOT_READY") as ErrorCode, message: messageOf(error) });
     });
+    continueWatch(entry);
+  }
+
+  /**
+   * Back or Forward loaded a new document, whose page agent has none of the rows the website no
+   * longer renders. A virtualized list there continues from the copy this client kept of the
+   * history entry, so the screen keeps its length and scroll position. The copy is sent once the
+   * watch is open in the bound page.
+   */
+  function continueWatch(entry: WatchEntry) {
+    if (!state.bound || !entry.subscribed || entry.refs === 0 || !("list" in entry.spec) || entry.spec.virtualized !== true) return;
+    const kept = entry.store.takeReturned();
+    if (!kept) return;
+    if (debug.on) debug.add("watch.continue", { context: id, watch: entry.id, records: kept.length });
+    // Advice: without it the list starts over with the rows on the page.
+    send("watch.resync", { id: entry.id, kept }).catch(() => {});
   }
 
   function resyncWatch(entry: WatchEntry, force = false) {
@@ -878,6 +894,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
       boundCount++;
       stopLoading();
       set({ generation: data.generation, url: data.url, bound: true, loading: false, error: null });
+      for (const entry of watches.values()) continueWatch(entry);
     },
     navigated(data) {
       drainEmits();
@@ -892,6 +909,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
         ...(newer ? { bound: false, view: null } : {}),
       });
       lastNavigation = data;
+      // The document may have bound before its navigation was reported.
+      for (const entry of watches.values()) continueWatch(entry);
       for (const listener of [...navigationListeners]) call(() => listener(data));
     },
     started() {

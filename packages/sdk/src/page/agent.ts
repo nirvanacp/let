@@ -183,7 +183,8 @@ function serve(connection: Connection, module: PageModule | undefined, view: Vie
         return {};
       case "watch.resync":
         if (args.id !== undefined && typeof args.id !== "string") throw new PageError("INVALID_ARGUMENT", "id must be a string");
-        watches.resync(args.id as string | undefined);
+        if (args.kept !== undefined && !(typeof args.id === "string" && isRecords(args.kept))) throw new PageError("INVALID_ARGUMENT", "kept must be the { key, data } records of the watch named by id");
+        watches.resync(args.id as string | undefined, args.kept as { key: string; data: unknown }[] | undefined);
         return {};
       case "wait": {
         const condition = args.for as Parameters<typeof holds>[0];
@@ -381,6 +382,11 @@ function jsonBytes(value: unknown): number | null {
   } catch {
     return null;
   }
+}
+
+/** List records as a watch keeps them: `{ key, data }` with a string key. */
+function isRecords(value: unknown): boolean {
+  return Array.isArray(value) && value.every(record => isObject(record) && typeof record.key === "string" && "data" in record);
 }
 
 function isObject(value: unknown): value is { [key: string]: any } {
