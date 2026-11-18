@@ -16,7 +16,7 @@ A servelet is an app's own backend: a small CRUD service in Go with its own SQLi
 | Records that need queries, joins, search, sorting over many rows, validation rules, uniqueness or computed results, on this device | A local servelet |
 | Data shared across devices or with other people | A remote service (see the applet guide [services and data](../applets/guides/services-and-data.md)). A local servelet keeps one phone's data. |
 
-Data the website already keeps stays on the website.
+Data the website already keeps stays on the website. A servelet is never a cache for website state: Genesis already keeps each watch's last value and shows it when the applet starts.
 
 ## Defaults
 

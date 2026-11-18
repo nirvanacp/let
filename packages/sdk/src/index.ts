@@ -16,8 +16,8 @@ export type {
   Watch,
   WatchOptions,
 } from "./client/context.js";
-export { createWatchStore, emptyWatchValue } from "./client/watch.js";
-export type { EmitResult, WatchStore, WatchValue } from "./client/watch.js";
+export { createWatchStore, emptyWatchValue, watchStatus } from "./client/watch.js";
+export type { DataStatus, EmitResult, WatchStore, WatchValue } from "./client/watch.js";
 export { css, field, record, role, text } from "./client/locator.js";
 export type { Website, WebsiteState } from "./client/presentation.js";
 export type { Services } from "./client/services.js";

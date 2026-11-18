@@ -30,7 +30,8 @@ import {
 } from "@let/core";
 import { GenesisError } from "../bridge.js";
 import { AnswerTimeout, type Session } from "./session.js";
-import { createWatchStore, type WatchStore, type WatchValue } from "./watch.js";
+import { debug } from "./debug.js";
+import { batchNotifications, createWatchStore, SNAPSHOT_SLICE_MIN, type WatchStore, type WatchValue } from "./watch.js";
 
 /** What the UI knows about one context. */
 export interface ContextState {
@@ -84,6 +85,11 @@ export interface PendingInput {
 export interface WatchOptions {
   /** The watch reads only while the URL matches one of these. */
   when?: UrlGuard[];
+  /**
+   * Genesis also keeps the watch's last value on the phone, for up to 7 days, and shows it, marked
+   * `stale`, when the applet starts again, until the page reads. Part of the watch's specification.
+   */
+  persist?: boolean;
 }
 
 /** One open watch: its value follows the page, and survives navigations as described in `watch.ts`. */
@@ -181,8 +187,8 @@ export interface ContextHandle {
   /** Asks every open watch for a fresh snapshot. */
   resync(): void;
   /**
-   * Forgets every copy the watches kept of this context's pages, so none shows after the account
-   * changed; with `current`, also the data shown now. Pending inputs settle as `unknown` with
+   * Forgets every copy the watches and Genesis kept of this context's pages, so none shows after
+   * the account changed; with `current`, also the data shown now. Pending inputs settle as `unknown` with
    * `CONTEXT_REPLACED`, unless `keepInputs` is set.
    */
   forget(options?: { current?: boolean; keepInputs?: boolean }): void;
@@ -218,6 +224,44 @@ const RESYNC_GAP_MS = 1000;
 const CLOSED_WATCHES_MAX = 32;
 /** How long the host keeps an "awake" hold at full speed before it counts as "running". */
 const HOLD_AWAKE_MAX_MS = 30_000;
+/** With the debug log on, applying one emit that takes longer than this is logged. */
+const EMIT_SLOW_MS = 8;
+/** Emits wait for the next animation frame, or this long when no frame comes. */
+const EMIT_FRAME_FALLBACK_MS = 100;
+
+/** `scheduler.yield`, where the engine has it. */
+function yielder(): (() => Promise<unknown>) | null {
+  const scheduler = (globalThis as { scheduler?: { yield?: () => Promise<unknown> } }).scheduler;
+  return typeof scheduler?.yield === "function" ? () => scheduler.yield!() : null;
+}
+
+/**
+ * Runs `run` at the next animation frame, or after a short timeout without one. A hidden
+ * document, such as the applet's page behind a revealed website, has no frames and slow timers,
+ * and draws nothing to batch for: there `run` follows the current task.
+ */
+function nextFrame(run: () => void) {
+  if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+    queueMicrotask(run);
+    return;
+  }
+  let done = false;
+  const once = () => {
+    if (done) return;
+    done = true;
+    clearTimeout(timer);
+    run();
+  };
+  const timer = setTimeout(once, typeof requestAnimationFrame === "function" ? EMIT_FRAME_FALLBACK_MS : 0);
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(once);
+}
+
+/** A list snapshot large enough to compare in slices. */
+function large(event: PageEmitEvent) {
+  if (event.kind !== "snapshot") return false;
+  const records = (event.data as { records?: unknown } | null)?.records;
+  return typeof records === "object" && records !== null && Object.keys(records).length > SNAPSHOT_SLICE_MIN;
+}
 
 interface InputRecord {
   key: string;
@@ -230,6 +274,8 @@ interface InputRecord {
   judging: boolean;
   /** Ends the wait for the destination. */
   abort: (() => void) | null;
+  /** `Date.now()` when the call started, for the debug log; 0 while the log is off. */
+  started: number;
 }
 
 interface WatchEntry {
@@ -237,16 +283,19 @@ interface WatchEntry {
   specJson: string;
   spec: ReadSpec;
   when?: UrlGuard[];
+  persist: boolean;
   store: WatchStore;
   handle: Watch;
   refs: number;
-  /** The generation the watch is open in, or null. */
-  openIn: number | null;
+  /** The host holds a subscription for this watch and opens it in each bound page. */
+  subscribed: boolean;
   lastResync: number;
   /** A resync that came within `RESYNC_GAP_MS` of the last one, sent when the gap is over. */
   resyncTimer: ReturnType<typeof setTimeout> | null;
   /** The last reference closed in this task; the page hears of it unless the watch opens again first. */
   closing: boolean;
+  /** `Date.now()` when the watch last subscribed while the debug log is on, until its first value; 0 otherwise. */
+  openedAt: number;
 }
 
 export function createContext(id: string, startUrl: string, session: Session): ContextControl {
@@ -350,6 +399,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
   function settle(record: InputRecord, result: ActionResult) {
     if (inputs.get(record.key) !== record) return;
     inputs.delete(record.key);
+    if (debug.on) debug.add("input", { context: id, op: record.op, ms: record.started ? Date.now() - record.started : null, outcome: result.outcome, code: result.code });
     record.resolve(result);
     pendingChanged();
   }
@@ -385,7 +435,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     let resolve!: (result: ActionResult) => void;
     const promise = new Promise<ActionResult>(done => { resolve = done; });
     const target = args.target === undefined ? null : JSON.stringify(args.target);
-    const record: InputRecord = { key, op, args, target, promise, resolve, judging: false, abort: null };
+    const record: InputRecord = { key, op, args, target, promise, resolve, judging: false, abort: null, started: debug.on ? Date.now() : 0 };
     inputs.set(key, record);
     pendingChanged();
 
@@ -467,6 +517,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     const level = holds.awake > 0 && !awakeSpent ? "awake" : holds.awake + holds.running > 0 ? "running" : null;
     if (level === held) return;
     held = level;
+    if (debug.on) debug.add("hold", { context: id, level });
     // A hold is advice: a failed send changes nothing the applet can act on.
     session.request("context.hold", { id, level }).catch(() => {});
   }
@@ -497,19 +548,48 @@ export function createContext(id: string, startUrl: string, session: Session): C
   const watches = new Map<string, WatchEntry>();
   let closeTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function openWatch(entry: WatchEntry) {
-    if (!state.bound || entry.refs === 0) return;
-    const generation = state.generation;
-    if (entry.openIn === generation) return;
-    entry.openIn = generation;
+  /**
+   * Subscribes to the watch in the host, which opens it in the context's bound page and in every
+   * page that binds after it, until `watch.unsubscribe`. An open that fails there arrives as an
+   * error status.
+   */
+  function subscribeWatch(entry: WatchEntry) {
+    if (entry.refs === 0 || entry.subscribed) return;
+    entry.subscribed = true;
     entry.store.restart();
-    const args: Record<string, unknown> = { id: entry.id, spec: entry.spec };
-    if (entry.when) args.when = entry.when;
-    send("watch.open", args).catch(error => {
-      if (entry.openIn === generation) entry.openIn = null;
-      if (error instanceof GenesisError && (RETRY.has(error.code) || error.code === "RETIRED")) return;
+    if (debug.on) {
+      entry.openedAt = Date.now();
+      debug.add("watch.subscribe", { context: id, watch: entry.id });
+    }
+    const params: Record<string, unknown> = { context: id, id: entry.id, spec: entry.spec };
+    if (entry.when) params.when = entry.when;
+    if (entry.persist) params.persist = true;
+    session.request("watch.subscribe", params).catch(error => {
+      if (error instanceof GenesisError && error.code === "RETIRED") return;
+      entry.subscribed = false;
       entry.store.failed({ code: (error?.code ?? "NOT_READY") as ErrorCode, message: messageOf(error) });
     });
+    continueWatch(entry);
+  }
+
+  /**
+   * Back or Forward loaded a new document, whose page agent has none of the rows the website no
+   * longer renders. A virtualized list there continues from the copy this client kept of the
+   * history entry, so the screen keeps its length and scroll position. The copy is sent once the
+   * watch is open in the bound page.
+   */
+  function continueWatch(entry: WatchEntry) {
+    // The page agent decides whether the watch reads a virtualized list: a page-module reader
+    // carries that flag in the page, not in the spec this client holds.
+    if (!state.bound || !entry.subscribed || entry.refs === 0) return;
+    let kept = entry.store.takeReturned();
+    if (!kept) return;
+    // The page keeps at most `limit` records of a list, so it is sent no more: the newest ones.
+    const limit = "list" in entry.spec ? entry.spec.limit : undefined;
+    if (limit !== undefined && kept.length > limit) kept = kept.slice(-limit);
+    if (debug.on) debug.add("watch.continue", { context: id, watch: entry.id, records: kept.length });
+    // Advice: without it the list starts over with the rows on the page.
+    send("watch.resync", { id: entry.id, kept }).catch(() => {});
   }
 
   function resyncWatch(entry: WatchEntry, force = false) {
@@ -525,14 +605,21 @@ export function createContext(id: string, startUrl: string, session: Session): C
     if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
     entry.resyncTimer = null;
     entry.lastResync = now;
-    if (entry.openIn !== state.generation || !state.bound) return openWatch(entry);
-    send("watch.resync", { id: entry.id }).catch(() => {});
+    if (!entry.subscribed) return subscribeWatch(entry);
+    // An unbound context sends a snapshot once its page binds and the host opens the watch.
+    if (!state.bound) return;
+    send("watch.resync", { id: entry.id }).catch(error => {
+      // The page has no such watch: its open failed. Subscribing again has the host open it.
+      if (!(error instanceof GenesisError && error.code === "NOT_FOUND") || !entry.subscribed) return;
+      entry.subscribed = false;
+      subscribeWatch(entry);
+    });
   }
 
   function watch(watchId: string, spec: ReadSpec, options: WatchOptions = {}): Watch {
     validateReadSpec(spec, "spec");
     if (options.when) validateGuards(options.when, "when");
-    const specJson = JSON.stringify([spec, options.when ?? null]);
+    const specJson = JSON.stringify([spec, options.when ?? null, options.persist === true]);
     // Another specification under a closing id: the page closes the old watch before it opens the new one.
     if (watches.get(watchId)?.closing && watches.get(watchId)!.specJson !== specJson) closeWatches();
     const existing = watches.get(watchId);
@@ -543,14 +630,14 @@ export function createContext(id: string, startUrl: string, session: Session): C
         // A screen change that closed it in this same task never closed the page's watch, so its data is current.
         if (!existing.closing) existing.store.reopened();
         existing.closing = false;
-        openWatch(existing);
+        subscribeWatch(existing);
       }
       return existing.handle;
     }
-    const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
+    const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax, emptyHoldMs: limits.documentReadyMs });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
-      id: watchId, specJson, spec, when: options.when, store, refs: 1, openIn: null, lastResync: 0, resyncTimer: null, closing: false,
+      id: watchId, specJson, spec, when: options.when, persist: options.persist === true, store, refs: 1, subscribed: false, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
       handle: {
         id: watchId,
         get: store.get,
@@ -565,7 +652,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
       },
     };
     watches.set(watchId, entry);
-    openWatch(entry);
+    subscribeWatch(entry);
     return entry.handle;
   }
 
@@ -573,11 +660,13 @@ export function createContext(id: string, startUrl: string, session: Session): C
   function closeWatches() {
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = null;
+    // Emits that arrived before the close still belong to the watch's kept copies.
+    drainEmits();
     for (const entry of [...watches.values()]) {
       if (!entry.closing) continue;
       entry.closing = false;
-      if (entry.openIn !== null && entry.openIn === state.generation && state.bound) send("watch.close", { id: entry.id }).catch(() => {});
-      entry.openIn = null;
+      if (entry.subscribed) session.request("watch.unsubscribe", { context: id, id: entry.id }).catch(() => {});
+      entry.subscribed = false;
       if (entry.resyncTimer) clearTimeout(entry.resyncTimer);
       entry.resyncTimer = null;
       // The closed watch stays, following navigations, so its history copies outlive the screen.
@@ -594,12 +683,104 @@ export function createContext(id: string, startUrl: string, session: Session): C
   }
 
   function forget(options: { current?: boolean; keepInputs?: boolean } = {}) {
+    drainEmits();
     for (const entry of watches.values()) entry.store.forget(options.current === true);
+    // Genesis's own copies of the pages, too, so none shows on the next start.
+    session.request("store.forget", { context: id }).catch(fail("store.forget"));
     if (options.keepInputs) return;
     for (const record of [...inputs.values()]) {
       record.abort?.();
       settle(record, { outcome: "unknown", code: "CONTEXT_REPLACED", message: "The account changed before the input finished" });
     }
+  }
+
+  /** Applies a page's emit to its watch, when it is for the current document and an open watch. */
+  function applyEmit(data: PageEmitEvent) {
+    if (data.cached) {
+      // A value Genesis kept, sent before the page has bound: it belongs to no document.
+      const entry = watches.get(data.stream);
+      if (entry?.subscribed) entry.store.emit(data);
+      return;
+    }
+    if (data.generation !== state.generation) return;
+    if (!state.view || state.view.n !== data.view.n || state.view.url !== data.view.url || state.view.generation !== data.view.generation) set({ view: data.view });
+    const entry = watches.get(data.stream);
+    if (!entry || !entry.subscribed) return;
+    if (entry.store.emit(data) === "resync") resyncWatch(entry);
+    if (debug.on && entry.openedAt) {
+      debug.add("watch.first", { context: id, watch: entry.id, ms: Date.now() - entry.openedAt });
+      entry.openedAt = 0;
+    }
+  }
+
+  // ---- Emit queue -------------------------------------------------------------------------------
+
+  /**
+   * Emits wait here for the next animation frame, then apply together, so each watch's listeners
+   * run once per frame. A large snapshot is compared in slices that yield to input first. Every
+   * other context event applies the waiting emits before it, so the order stays the host's.
+   */
+  const emitQueue: PageEmitEvent[] = [];
+  let flushScheduled = false;
+  let flushing = false;
+
+  function queueEmit(data: PageEmitEvent) {
+    emitQueue.push(data);
+    scheduleFlush();
+  }
+
+  function scheduleFlush() {
+    if (flushScheduled || flushing) return;
+    flushScheduled = true;
+    nextFrame(() => {
+      flushScheduled = false;
+      void flushEmits();
+    });
+  }
+
+  async function flushEmits() {
+    flushing = true;
+    const pause = yielder();
+    try {
+      while (emitQueue.length) {
+        const next = emitQueue[0]!;
+        if (pause && large(next)) {
+          await watches.get(next.stream)?.store.prepare(next, pause);
+          // Another context event applied it meanwhile.
+          if (emitQueue[0] !== next) continue;
+        }
+        batchNotifications(() => {
+          let first = true;
+          while (emitQueue.length) {
+            const event = emitQueue[0]!;
+            if (!first && pause && large(event)) break;
+            first = false;
+            emitQueue.shift();
+            applyTimed(event);
+          }
+        });
+      }
+    } finally {
+      flushing = false;
+      if (emitQueue.length) scheduleFlush();
+    }
+  }
+
+  /** Applies every waiting emit now. */
+  function drainEmits() {
+    if (!emitQueue.length) return;
+    batchNotifications(() => {
+      while (emitQueue.length) applyTimed(emitQueue.shift()!);
+    });
+  }
+
+  function applyTimed(data: PageEmitEvent) {
+    if (!debug.on) return applyEmit(data);
+    const start = performance.now();
+    applyEmit(data);
+    const end = performance.now();
+    performance.measure(`genesis.emit ${id}/${data.stream}`, { start, end });
+    if (end - start > EMIT_SLOW_MS) debug.add("emit.apply", { context: id, watch: data.stream, kind: data.kind, ms: Math.round(end - start) });
   }
 
   function resyncAll() {
@@ -714,19 +895,20 @@ export function createContext(id: string, startUrl: string, session: Session): C
   return {
     handle,
     bound(data) {
+      drainEmits();
       if (data.generation < latest) return;
       latest = data.generation;
       boundCount++;
       stopLoading();
       set({ generation: data.generation, url: data.url, bound: true, loading: false, error: null });
-      for (const entry of watches.values()) openWatch(entry);
+      for (const entry of watches.values()) continueWatch(entry);
     },
     navigated(data) {
+      drainEmits();
       if (data.generation < latest) return;
       // A new document: calls wait for its `context.bound`, which brings its generation.
       const newer = data.generation > latest;
       latest = data.generation;
-      if (newer) for (const entry of watches.values()) entry.openIn = null;
       for (const entry of watches.values()) entry.store.navigated(data);
       stopLoading();
       set({
@@ -734,6 +916,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
         ...(newer ? { bound: false, view: null } : {}),
       });
       lastNavigation = data;
+      // The document may have bound before its navigation was reported.
+      for (const entry of watches.values()) continueWatch(entry);
       for (const listener of [...navigationListeners]) call(() => listener(data));
     },
     started() {
@@ -742,22 +926,14 @@ export function createContext(id: string, startUrl: string, session: Session): C
       set({ loading: true });
     },
     gone(data) {
+      drainEmits();
       const error: ErrorBody = { code: (data.code ?? "NOT_READY") as ErrorCode, message: data.message ?? "The page is gone" };
       leftBy();
-      for (const entry of watches.values()) {
-        entry.openIn = null;
-        entry.store.gone(error);
-      }
+      for (const entry of watches.values()) entry.store.gone(error);
       stopLoading();
       set({ bound: false, loading: false, error });
     },
-    emit(data) {
-      if (data.generation !== state.generation) return;
-      if (!state.view || state.view.n !== data.view.n || state.view.url !== data.view.url || state.view.generation !== data.view.generation) set({ view: data.view });
-      const entry = watches.get(data.stream);
-      if (!entry || entry.openIn !== data.generation) return;
-      if (entry.store.emit(data) === "resync") resyncWatch(entry);
-    },
+    emit: queueEmit,
     grantEnded(data) {
       if (data.id !== id) return;
       for (const listener of [...grantListeners]) {

@@ -15,7 +15,13 @@ By default every applet shares one website sign-in with the others: signing in t
 | Data shared across devices or with other tools, or computed on a server | A declared service |
 | Data the website already keeps (its bookmarks, votes, follows) | The website, through watches, page inputs and page module commands |
 
-Do not copy website data into a store as a second source of truth. When a feature joins applet records with website data (categories over the website's bookmarks), store only what the applet owns, keyed by the website's stable ids, and read the rest from the page. Do not invent synchronization or migrations the user did not ask for.
+Do not copy website data into a store as a second source of truth, and never as a cache for faster starts: Genesis already keeps each watch's last value (see [website state is kept by Genesis](#website-state-is-kept-by-genesis)). When a feature joins applet records with website data (categories over the website's bookmarks), store only what the applet owns, keyed by the website's stable ids, and read the rest from the page. Do not invent synchronization or migrations the user did not ask for.
+
+## Website state is kept by Genesis
+
+Genesis keeps the last value of every watch while the applet runs, and shows it at once, as `stale`, when a page of that context opens again. A watch with `persist: true` is also kept on the phone for up to 7 days, so the next start shows it before the website loads. Use `persist` for the watches of the first screen and other screens the user opens often. Leave it off for private content the user would not expect to see before the site loads, such as messages.
+
+When the applet signs the user out, or switches account, call `genesis.forgetCached()` (or `context.forget()` for one context) so the next account never sees the last one's data. Genesis erases kept values itself when the user clears the website's data.
 
 ## Document storage
 

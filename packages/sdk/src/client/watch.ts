@@ -24,6 +24,11 @@ export interface WatchValue<V = unknown, R = unknown> {
   complete: boolean | undefined;
   /** The page the data was read from, or null before the first snapshot. */
   view: ViewId | null;
+  /**
+   * Epoch milliseconds when the data last changed, or null without data. A value Genesis kept from
+   * an earlier visit shows, marked `stale`, with the time it was read, until the page's snapshot.
+   */
+  updatedAt: number | null;
 }
 
 /** What the caller does after `emit`: `resync` means a patch could not be applied and a fresh snapshot is needed. */
@@ -45,11 +50,75 @@ export interface WatchStore {
   at(navigation: ContextNavigated): void;
   /** A UI opens the watch again: the data it kept is shown, marked stale, until the page's snapshot. */
   reopened(): void;
+  /**
+   * The list records kept of the history entry the context came back to in a new document, in
+   * order; null when there are none, and after the first call. The new page's virtualized list
+   * continues from them.
+   */
+  takeReturned(): { key: string; data: unknown }[] | null;
   /** Forgets every kept copy; with `current`, also the data shown now. */
   forget(current: boolean): void;
+  /**
+   * Compares a large snapshot's records with the current ones ahead of `emit`, awaiting `pause`
+   * between slices, so the work yields to input. `emit` uses the result while the data it was
+   * compared with is still current.
+   */
+  prepare(event: PageEmitEvent, pause: () => Promise<unknown>): Promise<void>;
 }
 
-type Data = Pick<WatchValue, "value" | "order" | "records" | "truncated" | "complete" | "view">;
+/** The status a screen renders from: a skeleton, the data, the data marked as refreshing, or an error. */
+export type DataStatus = "empty" | "loading" | "fresh" | "stale" | "failed";
+
+/**
+ * One status for a watch value. `loading`: no data yet, show a skeleton. `empty`: the page has
+ * nothing to show, or the watch is idle on this page. `fresh`: current data. `stale`: data from an
+ * earlier read, shown while the page reads again or after a failed read. `failed`: an error and no data.
+ */
+export function watchStatus(value: WatchValue): DataStatus {
+  if (hasData(value)) return value.status === "ready" && !value.stale ? "fresh" : "stale";
+  if (value.status === "error") return "failed";
+  if (value.idle || (value.status === "ready" && !value.stale)) return "empty";
+  return "loading";
+}
+
+/** A snapshot with more records than this is compared in slices when the caller can yield. */
+export const SNAPSHOT_SLICE_MIN = 100;
+const SNAPSHOT_SLICE = 50;
+
+export interface WatchStoreOptions {
+  /** History entries whose last ready copy the store keeps. */
+  historyEntriesMax: number;
+  /**
+   * How long stale data stays on show after the page's own read came back empty: a cached value,
+   * the copy of a history entry after Back, or the last data during a reload. A website often
+   * renders its content after the first read, and no message says that an empty page is done, so
+   * a context passes the time a page has to become ready (`limits.documentReadyMs`). Without it,
+   * an empty read shows at once.
+   */
+  emptyHoldMs?: number;
+}
+
+let batchDepth = 0;
+const heldNotifications = new Set<() => void>();
+
+/**
+ * Runs `apply`, and calls each store's listeners once after it, however many times its value
+ * changed meanwhile.
+ */
+export function batchNotifications(apply: () => void): void {
+  batchDepth++;
+  try {
+    apply();
+  } finally {
+    if (--batchDepth === 0) {
+      const notifications = [...heldNotifications];
+      heldNotifications.clear();
+      for (const notify of notifications) notify();
+    }
+  }
+}
+
+type Data = Pick<WatchValue, "value" | "order" | "records" | "truncated" | "complete" | "view" | "updatedAt">;
 
 const EMPTY_ORDER: readonly string[] = Object.freeze([]);
 const EMPTY_RECORDS: Readonly<Record<string, unknown>> = Object.freeze(Object.create(null));
@@ -57,7 +126,7 @@ const EMPTY_RECORDS: Readonly<Record<string, unknown>> = Object.freeze(Object.cr
 export function emptyWatchValue(): WatchValue {
   return {
     status: "loading", idle: false, stale: false, value: null, order: EMPTY_ORDER, records: EMPTY_RECORDS,
-    error: null, truncated: false, complete: undefined, view: null,
+    error: null, truncated: false, complete: undefined, view: null, updatedAt: null,
   };
 }
 
@@ -65,9 +134,19 @@ export function emptyWatchValue(): WatchValue {
  * The client side of one watch stream. It applies snapshots, statuses and in-order patches, and
  * keeps the last ready copy of each history entry (at most `historyEntriesMax`), so Back shows
  * the entry at once, marked `stale`, until the new document sends its snapshot.
+ *
+ * Stale data (a cached value, a history copy, the last data of a page that loads again) stays on
+ * show while the page's own read is empty: until that read has data, the watch goes idle or
+ * fails, the page changes, or `emptyHoldMs` pass. A cached value does so too when it arrives
+ * after that empty read.
  */
-export function createWatchStore(options: { historyEntriesMax: number }): WatchStore {
+export function createWatchStore(options: WatchStoreOptions): WatchStore {
+  const emptyHoldMs = options.emptyHoldMs ?? 0;
+  /** The watch's own state. `get()` returns `held` instead while stale data is on show. */
   let current = emptyWatchValue();
+  /** The stale data on show while `current`, the page's own read, is still empty. */
+  let held: WatchValue | null = null;
+  let holdTimer: ReturnType<typeof setTimeout> | null = null;
   /** The stream position of the last applied message; null until a snapshot starts it. */
   let stream: { generation: number; n: number; seq: number } | null = null;
   /** The context's current history entry, from the last committed navigation. */
@@ -76,13 +155,47 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
   const history = new Map<number, Data>();
   /** The URL the current data belongs to. */
   let url: string | null = null;
+  /** The copy of the history entry a new document came back to, until `takeReturned`. */
+  let returned: Data | null = null;
   const listeners = new Set<() => void>();
+  /** The records of a large snapshot, compared ahead of `emit` with `base`. */
+  let prepared: { body: unknown; base: Readonly<Record<string, unknown>>; records: Record<string, unknown> } | null = null;
+
+  const notify = () => { for (const listener of [...listeners]) listener(); };
 
   function set(next: WatchValue) {
     if (same(next, current)) return;
+    // An empty read of a page that may not have rendered yet does not replace stale data.
+    const hold = emptyHoldMs > 0 && emptyRead(next) && (held !== null || (current.stale && hasData(current)));
+    const shown = held ?? current;
     current = next;
+    if (hold) {
+      held = shown;
+      holdTimer ??= setTimeout(settle, emptyHoldMs);
+      return;
+    }
     remember();
-    for (const listener of [...listeners]) listener();
+    release();
+    announce();
+  }
+
+  /** Tells the listeners, once the current batch of emits is applied. */
+  function announce() {
+    if (batchDepth > 0) heldNotifications.add(notify);
+    else notify();
+  }
+
+  function release() {
+    if (holdTimer) clearTimeout(holdTimer);
+    holdTimer = null;
+    held = null;
+  }
+
+  /** The page had its time to render: its empty read is the value. */
+  function settle() {
+    release();
+    remember();
+    notify();
   }
 
   /** Keeps the current data as the history entry of the current index, when they agree. */
@@ -95,7 +208,9 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
 
   function snapshot(event: PageEmitEvent, body: WatchSnapshot): WatchValue {
     const list = Array.isArray(body.order);
-    const records = list ? reuse(current.records, body.records ?? {}) : EMPTY_RECORDS;
+    const ready = prepared && prepared.body === body && prepared.base === current.records ? prepared.records : null;
+    prepared = null;
+    const records = list ? ready ?? reuse(current.records, body.records ?? {}) : EMPTY_RECORDS;
     const order = list ? sameArray(current.order, body.order!) ? current.order : Object.freeze([...body.order!]) : EMPTY_ORDER;
     url = event.url;
     if (body.status === "error") {
@@ -112,6 +227,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
       truncated: body.truncated === true,
       complete: body.complete,
       view: sameView(current.view, event.view) ? current.view : event.view,
+      updatedAt: event.at ?? Date.now(),
     };
   }
 
@@ -126,7 +242,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
     }
     const order = body.order && !sameArray(current.order, body.order) ? Object.freeze([...body.order]) : current.order;
     const complete = "complete" in body ? body.complete : current.complete;
-    return { ...current, order, records, complete };
+    return { ...current, order, records, complete, updatedAt: Date.now() };
   }
 
   function status(event: PageEmitEvent, body: WatchStatus): WatchValue {
@@ -139,7 +255,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
   }
 
   return {
-    get: () => current,
+    get: () => held ?? current,
     subscribe(listener) {
       listeners.add(listener);
       return () => { listeners.delete(listener); };
@@ -147,6 +263,23 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
 
     emit(event) {
       const { kind, seq, view } = event;
+      if (event.cached) {
+        if (kind !== "snapshot") return "ignored";
+        // The page's first read can win the race against the kept value. While that read is
+        // empty, the kept value is still the best there is to show, and is held like one that came first.
+        if (stream && emptyHoldMs > 0 && !held && emptyRead(current) && sameUrl(url, event.url)) {
+          const value = { ...snapshot(event, event.data as WatchSnapshot), stale: true };
+          if (!hasData(value)) return "ignored";
+          held = value;
+          holdTimer ??= setTimeout(settle, emptyHoldMs);
+          announce();
+          return "applied";
+        }
+        // Otherwise a kept value fills in only until the page's own stream starts, and stays stale.
+        if (stream || (current.status === "ready" && !current.stale)) return "ignored";
+        set({ ...snapshot(event, event.data as WatchSnapshot), stale: true });
+        return "applied";
+      }
       if (kind === "patch") {
         if (!stream || stream.generation !== view.generation || stream.n !== view.n || seq !== stream.seq + 1) return "resync";
         stream.seq = seq;
@@ -166,6 +299,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
         if (index >= navigation.size || (index === navigation.index && !sameUrl(keptUrl, navigation.url))) history.delete(index);
       }
       entry = { index: navigation.index, url: navigation.url };
+      returned = null;
       if (navigation.sameDocument) {
         // The agent sends a snapshot for the new view; until then the data belongs to the old one.
         if (!sameUrl(url, navigation.url)) restore(navigation);
@@ -177,6 +311,7 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
         set({ ...current, status: "loading", error: null, stale: hasData(current) });
       } else {
         restore(navigation);
+        returned = history.get(navigation.index) ?? null;
       }
     },
 
@@ -202,11 +337,36 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
       if (hasData(current)) set({ ...current, status: "loading", error: null, stale: true });
     },
 
+    takeReturned() {
+      const kept = returned;
+      returned = null;
+      if (!kept || kept.order.length === 0) return null;
+      return kept.order.map(key => ({ key, data: kept.records[key] }));
+    },
+
     forget(all) {
       history.clear();
+      returned = null;
       if (!all) return;
       url = null;
       set(emptyWatchValue());
+    },
+
+    async prepare(event, pause) {
+      const body = event.data as WatchSnapshot;
+      if (event.kind !== "snapshot" || !Array.isArray(body.order) || !body.records) return;
+      const keys = Object.keys(body.records);
+      if (keys.length <= SNAPSHOT_SLICE_MIN) return;
+      const base = current.records;
+      const out: Record<string, unknown> = Object.create(null);
+      let changed = keys.length !== Object.keys(base).length;
+      for (let start = 0; start < keys.length; start += SNAPSHOT_SLICE) {
+        if (start > 0) await pause();
+        for (const key of keys.slice(start, start + SNAPSHOT_SLICE)) {
+          if (reuseOne(base, body.records, out, key)) changed = true;
+        }
+      }
+      prepared = { body, base, records: changed ? Object.freeze(out) : base };
     },
   };
 
@@ -221,12 +381,17 @@ export function createWatchStore(options: { historyEntriesMax: number }): WatchS
 }
 
 function data(value: WatchValue): Data {
-  const { value: v, order, records, truncated, complete, view } = value;
-  return { value: v, order, records, truncated, complete, view };
+  const { value: v, order, records, truncated, complete, view, updatedAt } = value;
+  return { value: v, order, records, truncated, complete, view, updatedAt };
 }
 
 function hasData(value: WatchValue) {
   return value.value !== null || value.order.length > 0;
+}
+
+/** A read of the page itself that found nothing: a list without items, or a null value. */
+function emptyRead(value: WatchValue) {
+  return value.status === "ready" && !value.stale && !value.idle && !hasData(value);
 }
 
 function sameUrl(a: string | null | undefined, b: string | null | undefined) {
@@ -252,15 +417,18 @@ function reuse(previous: Readonly<Record<string, unknown>>, next: Record<string,
   const out: Record<string, unknown> = Object.create(null);
   const keys = Object.keys(next);
   let changed = keys.length !== Object.keys(previous).length;
-  for (const key of keys) {
-    const old = previous[key];
-    out[key] = old === undefined ? next[key] : keep(old, next[key]);
-    if (out[key] !== old) changed = true;
-  }
+  for (const key of keys) if (reuseOne(previous, next, out, key)) changed = true;
   return changed ? Object.freeze(out) : previous;
 }
 
-/** True when nothing a UI reads changed, so `get()` keeps returning the same object. */
+/** Sets `out[key]` to the previous record when its JSON is unchanged; true when it changed. */
+function reuseOne(previous: Readonly<Record<string, unknown>>, next: Record<string, unknown>, out: Record<string, unknown>, key: string) {
+  const old = previous[key];
+  out[key] = old === undefined ? next[key] : keep(old, next[key]);
+  return out[key] !== old;
+}
+
+/** True when nothing a UI reads changed, so `get()` keeps returning the same object; `updatedAt` follows the data. */
 function same(a: WatchValue, b: WatchValue) {
   return a.status === b.status && a.idle === b.idle && a.stale === b.stale && a.value === b.value
     && a.order === b.order && a.records === b.records && a.error === b.error && a.truncated === b.truncated

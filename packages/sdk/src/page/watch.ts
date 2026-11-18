@@ -1,4 +1,5 @@
 import {
+  entryKey,
   matchesGuard,
   type ErrorBody,
   type Limits,
@@ -15,12 +16,15 @@ import { debounce } from "./engine/debounce.js";
 import { diffRegion, json, keepNear, mergeVirtualized, type PageRecord, type Region } from "./engine/diff.js";
 import { invalidate, touches, type Change, type Invalidation, type RegionIndex } from "./engine/invalidate.js";
 import { observe, type Observer } from "./engine/observe.js";
+import { debug } from "./debug.js";
 import { errorBody, PageError } from "./errors.js";
 import { reach } from "./locate.js";
 import type { Compiled, CompiledList } from "./read.js";
 
 /** Past this many unprocessed changes a batch re-reads every watch instead of tracking them. */
 const CHANGES_MAX = 10000;
+/** Virtualized lists whose records are kept after their view changed or their watch closed; the oldest goes first. */
+const KEPT_MAX = 8;
 
 export interface WatchHost {
   limits: Limits;
@@ -43,6 +47,8 @@ interface State {
 
 interface Watch {
   id: string;
+  /** The specification as JSON, so kept records are never used under another one. */
+  spec: string;
   compiled: Compiled;
   when?: UrlGuard[];
   seq: number;
@@ -62,13 +68,18 @@ interface Watch {
   state: State;
   /** What the client has: the state as last emitted. */
   sent: State | null;
+  /** The records a virtualized list had when this view was last read, until the first read that finds items. */
+  kept: PageRecord[] | null;
 }
 
 export interface Watches {
   open(id: string, spec: ReadSpec, when?: UrlGuard[]): void;
   close(id: string): void;
-  /** Emits a fresh snapshot of one watch, or of every watch. */
-  resync(id?: string): void;
+  /**
+   * Emits a fresh snapshot of one watch, or of every watch. With `kept`, the records the client
+   * has of this view from an earlier document, a virtualized list reads again and continues from them.
+   */
+  resync(id?: string, kept?: PageRecord[]): void;
   closeAll(): void;
   /** The element of one record of a list watch: `null` without such a watch, `undefined` when the record is not on the page. */
   record(id: string, key: string): Element | null | undefined;
@@ -83,10 +94,30 @@ export function createWatches(host: WatchHost): Watches {
   const { limits } = host;
   const watches = new Map<string, Watch>();
   let pending: Change[] = [];
+  /** The next batch reads every watch again instead of following `pending`. */
   let overflow = false;
   let observer: Observer | null = null;
   let stopped = false;
   const absent = new WeakSet<PageRecord>();
+  /**
+   * The records of virtualized lists by watch and view. A website that comes back to a view, as
+   * on Back, renders only the rows around its scroll position, so the list continues from the
+   * records it had there instead of starting over with those few rows. They end with the
+   * document; when Back loads a new one, the client sends its copy with `resync`.
+   */
+  const kept = new Map<string, PageRecord[]>();
+  let viewKey = entryKey(location.href);
+
+  const keptKey = (watch: Watch) => `${viewKey}\n${watch.id}\n${watch.spec}`;
+
+  /** Keeps a virtualized list's records for the view they were read in. */
+  function keep(watch: Watch) {
+    if (watch.compiled.kind !== "list" || !watch.compiled.virtualized || watch.state.records.length === 0) return;
+    const key = keptKey(watch);
+    kept.delete(key);
+    kept.set(key, watch.state.records);
+    if (kept.size > KEPT_MAX) kept.delete(kept.keys().next().value!);
+  }
 
   const batch = debounce(flush, limits.publishQuietMs, limits.publishMaxDelayMs);
 
@@ -104,7 +135,16 @@ export function createWatches(host: WatchHost): Watches {
       }
       batch.schedule();
     });
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => batch.schedule(), { once: true });
+    // A reader can depend on `document.readyState`, and parsing can end without another DOM change
+    // (a script that blocks the end of the page), so every watch reads again once the page is parsed.
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => {
+        if (!observer) return;
+        pending = [];
+        overflow = true;
+        batch.schedule();
+      }, { once: true });
+    }
   }
 
   function stopObserving() {
@@ -155,6 +195,7 @@ export function createWatches(host: WatchHost): Watches {
    */
   function readList(watch: Watch, compiled: CompiledList, dirty: Set<string> | "all"): State {
     const previous = watch.state;
+    let continued = previous.records;
     const elements = watch.root ? compiled.items(watch.root) : [];
     const before = new Map(previous.records.map(record => [record.key, record]));
     const known = watch.elements;
@@ -171,7 +212,15 @@ export function createWatches(host: WatchHost): Watches {
     }
     watch.elements = next;
     const state: State = { status: "ready", value: null, records, complete: compiled.complete() };
-    if (compiled.virtualized) state.records = markAbsent(mergeVirtualized(previous.records, records, compiled.limit), next);
+    if (compiled.virtualized) {
+      // The first rows the page shows decide: the kept records continue when one of them is among
+      // these rows, and are dropped when the page shows another list.
+      if (watch.kept && records.length > 0) {
+        if (continued.length === 0 && watch.kept.some(record => next.has(record.key))) continued = watch.kept;
+        watch.kept = null;
+      }
+      state.records = markAbsent(mergeVirtualized(continued, records, compiled.limit), next);
+    }
     if (truncated) state.truncated = true;
     return state;
   }
@@ -226,6 +275,7 @@ export function createWatches(host: WatchHost): Watches {
   function send(watch: Watch, kind: PageEmitParams["kind"], data: WatchSnapshot | WatchPatch | WatchStatus) {
     const view = host.view();
     const params: PageEmitParams = { stream: watch.id, kind, seq: ++watch.seq, view, url: view.url, data };
+    emitted++;
     return host.emit(params);
   }
 
@@ -371,8 +421,13 @@ export function createWatches(host: WatchHost): Watches {
     return false;
   }
 
+  /** Emits sent since the last batch began, for the debug log. */
+  let emitted = 0;
+
   function flush() {
     if (stopped) return;
+    const started = debug.on ? performance.now() : 0;
+    emitted = 0;
     const changes = pending;
     const whole = overflow;
     pending = [];
@@ -397,6 +452,7 @@ export function createWatches(host: WatchHost): Watches {
     }
     measure();
     observeScopes();
+    if (debug.on && emitted > 0) debug.add("publish", { changes: changes.length, emits: emitted, ms: Math.round(performance.now() - started) });
   }
 
   /** Runs one watch's step of a batch; a throw becomes that watch's error, and the other watches go on. */
@@ -434,9 +490,11 @@ export function createWatches(host: WatchHost): Watches {
       if (watches.size >= limits.watchesMax) throw new PageError("QUOTA_EXCEEDED", `At most ${limits.watchesMax} watches can be open`);
       const compiled = host.compile(spec);
       const watch: Watch = {
-        id, compiled, when, seq: 0, idle: false, snapshot: true, root: null, items: new WeakMap(), elements: new Map(),
+        id, spec: JSON.stringify(spec), compiled, when, seq: 0, idle: false, snapshot: true, root: null, items: new WeakMap(), elements: new Map(),
         dependsOn: [], dependsOnMissing: false, scopes: new Set(), state: { status: "ready", value: null, records: [] }, sent: null,
+        kept: null,
       };
+      watch.kept = kept.get(keptKey(watch)) ?? null;
       // Read and serialize before registering: a value that is not JSON data fails the open and leaves no watch behind.
       const reads = !when || matchesGuard(location.href, when);
       if (reads) {
@@ -451,15 +509,23 @@ export function createWatches(host: WatchHost): Watches {
       measure();
     },
     close(id) {
+      const watch = watches.get(id);
+      if (watch) keep(watch);
       watches.delete(id);
       if (watches.size === 0) stopObserving();
       else observeScopes();
     },
-    resync(id) {
+    resync(id, kept) {
       if (id !== undefined && !watches.has(id)) throw new PageError("NOT_FOUND", `No watch ${id} is open`);
       for (const watch of watches.values()) {
         if (id !== undefined && watch.id !== id) continue;
         watch.snapshot = true;
+        if (kept && id !== undefined && watch.compiled.kind === "list" && watch.compiled.virtualized) {
+          // Read from nothing, as in a new view, so the rows on the page decide whether the list continues.
+          watch.elements = new Map();
+          watch.state = { status: "ready", value: null, records: [] };
+          watch.kept = kept;
+        }
         // An idle watch says so again; the client may have lost the status.
         if (watch.idle) post(watch, "status", { idle: true });
       }
@@ -468,6 +534,7 @@ export function createWatches(host: WatchHost): Watches {
     },
     closeAll() {
       watches.clear();
+      kept.clear();
       stopObserving();
     },
     record(id, key) {
@@ -485,11 +552,14 @@ export function createWatches(host: WatchHost): Watches {
       flush();
     },
     viewChanged() {
+      for (const watch of watches.values()) keep(watch);
+      viewKey = entryKey(location.href);
       for (const watch of watches.values()) {
         watch.snapshot = true;
         watch.sent = null;
         watch.elements = new Map();
         watch.state = { status: "ready", value: null, records: [] };
+        watch.kept = kept.get(keptKey(watch)) ?? null;
       }
       // The website renders the new route after it changes the URL; read once the DOM settles.
       batch.cancel();

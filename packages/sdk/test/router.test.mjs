@@ -79,8 +79,8 @@ describe("router", () => {
     const { host, router } = await start();
     load(host, START);
     await tick();
-    const open = host.requests.find(r => r.params?.op === "watch.open");
-    assert.equal(open.params.args.id, "router:ready:feed");
+    const subscribe = host.requests.find(r => r.method === "watch.subscribe" && r.params.id === "router:ready:feed");
+    assert.equal(subscribe.params.context, "primary");
     assert.equal(router.status().status, "loading");
     snapshot(host, "router:ready:feed", START, true);
     await tick(READY_MS + 20);

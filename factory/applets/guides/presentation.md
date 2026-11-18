@@ -52,6 +52,18 @@ if (stories.order.length === 0) {
 }
 ```
 
+Each watch is in one of five data states, which `watchStatus(value)` and `useWatchStatus` return:
+
+| State | Meaning | The screen shows |
+| --- | --- | --- |
+| `loading` | No data yet, the page is reading | The skeleton |
+| `fresh` | Data the page just read | The content |
+| `stale` | Data kept from an earlier visit or entry, while the page reads again | The content, with the refreshing state of [stale pages](#stale-pages) |
+| `empty` | The page read and has nothing, or the watch is idle on this URL | The empty state |
+| `failed` | No data and an error | The error with Retry and the website |
+
+Genesis keeps each watch's last value across pages and, with `persist`, across starts, so most screens open `stale` and never show a skeleton.
+
 `status()` is the route's status for the active context, or for the context you name: `loading`, `ready`, `error`, `auth` or `unsupported`, with `stale`, `error`, `params` and `signedIn`. Between a context's document going away and the next one binding, it is `loading`. Treat empty as a ready page with an empty list, never as "no records yet".
 
 Unknown is not empty either. While the page is loading, a field the reader has not found is missing because the page has not drawn it yet. Show the skeleton for it, and render a fallback such as "(no subject)" or a zero count only once the page is ready and not stale and the field is still missing:
@@ -81,6 +93,7 @@ When a context starts showing the website, the shell reveals that context's page
 - A link to a page the applet does not customize opens the website in the same session, with the same history. Back goes to the previous entry, which shows the applet screen again if it has a route.
 - A link shared from another app shows the applet screen when it matches a route, like any other navigation, and the website otherwise (see [navigation](navigation.md#links-from-other-apps)).
 - A page that never becomes ready shows the website after 15 seconds. Fix the route's `ready` read rather than hiding this.
+- While the website or a window it opened covers the applet, Genesis does not draw the applet's page. While the page is quiet its document is hidden (`document.visibilityState` is `hidden`), so animations and `requestAnimationFrame` pause and timers run at most about once a second; scripts and messages keep running. Genesis runs the page in full for about two seconds whenever a message reaches it, and at least every 30 seconds: the document then reports `visible` but still draws nothing, so `requestAnimationFrame` callbacks wait. Do not read `visibilityState` to learn whether the applet is covered; `useRouter().revealed` says that. A script animation (`element.animate`) that starts or is still running when the page is hidden never ends by itself, so end it with `finish()`, as the `Stage` in the [UI kit](ui-kit.md) does. The page draws again when the applet's screen returns.
 
 ## Motion
 

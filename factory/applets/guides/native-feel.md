@@ -56,7 +56,7 @@ Each routed screen draws every state below, in this order of precedence ([presen
 
 ## Taps and actions
 
-- **Pressed state at once** on every row, button, chip and icon button ([motion](motion.md#controls)). The kit's base styles remove the web tap highlight, the double-tap zoom delay and text selection on controls.
+- **Pressed state at once** on every row, button, chip and icon button, changing only `transform` and `opacity` ([motion](motion.md#controls)). The kit's base styles remove the web tap highlight, the double-tap zoom delay (`touch-action: manipulation`) and text selection on controls.
 - **Optimistic toggles.** A star, vote, follow or save shows the requested state at once from `usePending`, then the page's state ([interactions](interactions.md)).
 - **Busy for long enough to see.** A control whose work can fail fast stays in its ongoing state for at least 800 ms from the tap, up to about 4 seconds when no answer comes, and is disabled meanwhile ([motion](motion.md#feedback-after-an-action), `useBusy` and `RetryButton` in the [UI kit](ui-kit.md#feedback)).
 - **One tap, one write.** A disabled busy control stops a second tap from sending a second write ([rules](rules.md#user-paced-writes)).
@@ -68,7 +68,7 @@ Each routed screen draws every state below, in this order of precedence ([presen
 - Back closes the open menu, sheet or dialog first, then returns to the previous entry at once with its scroll position (`ScrollMemory`). It never waits for an animation or a page ([navigation](navigation.md#back)).
 - Reselecting the current tab returns to its start page, then scrolls to the top.
 - Screen changes take their motion from where the screens sit: push, pop, fade through, drawer, sheet ([motion](motion.md#screen-transitions), `Stage` in the [UI kit](ui-kit.md#motion-stage)).
-- Loaders follow what is on screen: skeleton when nothing is, a progress bar after 250 ms when content is, a spinner inside Load more, an ongoing label on the control that runs ([motion](motion.md#loaders)).
+- Loaders follow the data state: kept data shows at once as `stale`, a skeleton only when nothing is known (`loading`), a progress bar after 250 ms when content is, a spinner inside Load more, an ongoing label on the control that runs ([motion](motion.md#loaders)).
 - Pull to refresh where the product has it, plus a labeled Refresh control.
 - Reduced motion swaps at once and keeps every state change, including pseudo-element animations such as a progress bar's `::before` ([motion](motion.md#reduced-motion)).
 

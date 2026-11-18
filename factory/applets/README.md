@@ -32,6 +32,7 @@ Example request to an agent:
 | Match the source product's mobile design | [Design](guides/design.md) |
 | Store records or connect a backend | [Services and data](guides/services-and-data.md) |
 | Give the app its own backend on the phone, with a database | [Servelets](../servelets/README.md) |
+| Make screens open fast and read the applet's debug log | [Patterns](guides/patterns.md#performance), [verification](guides/verification.md#diagnosing) |
 | Check and debug the result | [Verification](guides/verification.md) |
 | Sign in to test accounts during checks | [Test accounts skill](skills/genesis-test-accounts/SKILL.md) |
 | Keep applet specs and change records | [Applet records](guides/applet-records.md) |
@@ -42,7 +43,7 @@ Agents work from an ordinary product request. They ask focused questions when un
 
 ## What is available
 
-This kit matches SDK 0.0.0, tools 0.0.0, manifest schema 6, bundle format 3, protocol 1, page control API (`adapterApi`) 1. `kit.json` in an exported copy records the same versions. Applets have up to three website contexts, a UI built with any web framework, an optional page module with readers and desired-state commands, routes and overlay screens declared in code through the router helper, applet document storage and declared HTTPS services. Genesis refuses an applet built for other versions, and the tools report the difference.
+This kit matches SDK 0.0.0, tools 0.0.0, manifest schema 6, bundle format 3, protocol 2, page control API (`adapterApi`) 1. `kit.json` in an exported copy records the same versions. Applets have up to three website contexts, a UI built with any web framework, an optional page module with readers and desired-state commands, routes and overlay screens declared in code through the router helper, applet document storage and declared HTTPS services. Genesis refuses an applet built for other versions, and the tools report the difference: an applet built before protocol 2 shows "Needs update" until it is rebuilt with the current SDK.
 
 The `genesis-applet` CLI creates, checks and builds applets with Node only. A debug build of the Genesis app accepts development installs over adb and applies them without restarting. Release builds install applets bundled into the APK and applets that people add from a public GitHub repository, whose releases CI rebuilt and compared with the committed build ([publishing](guides/publishing.md)). Publisher signing does not exist yet.
 

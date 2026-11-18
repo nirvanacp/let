@@ -44,6 +44,19 @@ export interface Limits {
   inputBurst?: number;
   /** Milliseconds for one input call of the burst to come back. */
   inputRefillMs?: number;
+  /** The user turned this applet's debug log on: the document sends its events with `debug.log`. Absent in an older Genesis. */
+  debugLog?: boolean;
+}
+
+/**
+ * One debug log event. `t` is milliseconds since the epoch, `ev` names the event and `d` holds
+ * its fields: names, counts, durations and error codes, never page text, stored data, typed
+ * text, cookies or query strings.
+ */
+export interface LogEntry {
+  t: number;
+  ev: string;
+  d?: Record<string, unknown>;
 }
 
 /** The first message a document sends. */
@@ -136,9 +149,11 @@ export type ForegroundMethod =
   | "session.save"
   | "back.handled" | "back.leave"
   | "page.call" | "page.cancel"
+  | "watch.subscribe" | "watch.unsubscribe" | "store.forget"
   | "context.grant" | "context.hold"
-  | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable";
-export type ContextMethod = "page.result" | "page.progress" | "page.emit" | "page.input" | "page.files" | "page.share";
+  | "files.pick" | "files.release" | "downloads.save" | "share.open" | "links.openExternal" | "notifications.enable"
+  | "debug.log";
+export type ContextMethod = "page.result" | "page.progress" | "page.emit" | "page.input" | "page.files" | "page.share" | "debug.log";
 export type Method = ForegroundMethod | ContextMethod;
 
 export type ForegroundEventName =
@@ -340,6 +355,37 @@ export interface PageCancelParams {
   callId?: string;
 }
 
+/**
+ * Params of the foreground method `watch.subscribe`. The host opens the watch (`watch.open`) in
+ * every document of the context that binds while the subscription lasts, and reports an open that
+ * failed as a `status` emit with `status: "error"`. Answers `{}` at once; the same `id` with
+ * another `spec` or `when` answers `CONFLICT`. A subscription ends with `watch.unsubscribe`, a new
+ * foreground document or the applet's retirement. `watch.open` and `watch.close` are not
+ * `page.call` operations of the foreground.
+ */
+export interface WatchSubscribeParams {
+  context: string;
+  id: string;
+  spec: ReadSpec;
+  when?: UrlGuard[];
+  /** The host also keeps the watch's last value on the phone, for the next start of the applet. */
+  persist?: boolean;
+}
+
+/**
+ * Params of the foreground method `store.forget`: the host forgets the watch values it kept, in
+ * memory and on the phone, of `context` or of every context. Answers `{}`.
+ */
+export interface StoreForgetParams {
+  context?: string;
+}
+
+/** Params of the foreground method `watch.unsubscribe`: the host closes the page's watch. */
+export interface WatchUnsubscribeParams {
+  context: string;
+  id: string;
+}
+
 /** Data of the context event `call`. `deadlineMs` is the time the call has, in milliseconds. */
 export interface PageCallEvent {
   callId: string;
@@ -411,6 +457,13 @@ export interface PageEmitParams {
 export interface PageEmitEvent extends PageEmitParams {
   context: string;
   generation: number;
+  /**
+   * A snapshot the host kept from an earlier visit, sent before the page's own: it carries no
+   * stream position, and `view` and `url` name the context's current URL.
+   */
+  cached?: boolean;
+  /** Epoch milliseconds when the cached value last changed. */
+  at?: number;
 }
 
 /** Data of the foreground event `context.bound`: a page agent in the context accepts calls. */

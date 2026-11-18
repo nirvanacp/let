@@ -21,6 +21,7 @@ import {
   type TableRoute,
 } from "@let/core";
 import { GenesisError } from "../bridge.js";
+import { debug } from "../client/debug.js";
 import type { Watch } from "../client/context.js";
 import type { Genesis } from "../client/session.js";
 
@@ -65,6 +66,15 @@ export interface RouterOptions {
   };
   /** Replaces the default presentation rules: whether a context shows the applet (`custom`) or its website. */
   decide?: (context: CoordinatorContext, route: TableRoute | null) => Presentation;
+  /**
+   * `true` runs each screen change inside a View Transition where the engine has them and the
+   * person has not asked for reduced motion, so the screens cross-fade. Off by default, because an
+   * applet with its own screen animation would animate every change twice. The transition
+   * captures the new screen one `setTimeout(0)` after the router tells its listeners, so it
+   * assumes the UI library renders a state change at once or within that task, as React does
+   * for store updates. A library that renders later cross-fades to the old screen.
+   */
+  viewTransitions?: boolean;
 }
 
 /** `{ url }` loads a website URL in a context; `{ screen }` opens an overlay screen. */
@@ -184,11 +194,42 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
   let pendingChanged = false;
 
   let version = 0;
+  /** The screen last written to the debug log. */
+  let loggedScreen = "";
+  /** The key of the screen the listeners last heard of. */
+  let shownKey: string | null = null;
+  /** A View Transition is waiting to tell the listeners. */
+  let transitioning = false;
   function notify() {
     version++;
     pendingChanged = false;
     screenCache = undefined;
+    if (debug.on) logScreen();
+    if (transitioning) return;
+    const previous = shownKey;
+    shownKey = currentScreen()?.key ?? null;
+    if (previous !== null && shownKey !== null && previous !== shownKey && revealedNow() === null && canTransition()) {
+      transitioning = true;
+      document.startViewTransition!(() => {
+        transitioning = false;
+        shownKey = currentScreen()?.key ?? null;
+        tell();
+        // The UI renders in a microtask after the listeners, as React does; the new state is captured after it.
+        return new Promise<void>(resolve => setTimeout(resolve, 0));
+      });
+      return;
+    }
+    tell();
+  }
+
+  function tell() {
     for (const listener of [...listeners]) listener();
+  }
+
+  function canTransition() {
+    if (options.viewTransitions !== true || destroyed || typeof document === "undefined") return false;
+    if (typeof document.startViewTransition !== "function" || document.visibilityState !== "visible") return false;
+    return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
 
   // ---- Coordinator ------------------------------------------------------------------------------
@@ -369,6 +410,15 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
       }
     }
     return (screenCache = screen);
+  }
+
+  /** Writes the screen to the debug log when it changed: its route id and context, never its params. */
+  function logScreen() {
+    const screen = currentScreen();
+    const text = screen ? `${screen.id} ${screen.context} ${screen.overlay}` : "";
+    if (text === loggedScreen) return;
+    loggedScreen = text;
+    debug.add("route", screen ? { screen: screen.id, context: screen.context, overlay: screen.overlay } : { screen: null });
   }
 
   let nextScreenKey = 1;

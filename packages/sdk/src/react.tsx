@@ -1,5 +1,6 @@
 import {
   createContext,
+  memo,
   useCallback,
   useContext,
   useEffect,
@@ -16,7 +17,7 @@ import type { ActionResult, ActivityLevel, FilesPick, GrantKind, GrantResult, Lo
 import type { PickedFile } from "./client/actions.js";
 import type { ContextHandle, ContextState, Expect, PendingInput, Watch, WatchOptions } from "./client/context.js";
 import { connect, type ConnectOptions, type Genesis } from "./client/session.js";
-import { emptyWatchValue, type WatchValue } from "./client/watch.js";
+import { emptyWatchValue, watchStatus, type DataStatus, type WatchValue } from "./client/watch.js";
 import { createRouter, type CurrentScreen, type NavigateTarget, type Router, type RouterOptions, type RouteStatus } from "./router/router.js";
 import type { Storage, StorageBatch, StoredDocument } from "./types.js";
 
@@ -162,11 +163,11 @@ const EMPTY = emptyWatchValue();
 export function useWatch<V = unknown, R = unknown>(id: string, spec: ReadSpec, options: WatchOptions & { context?: string } = {}): WatchValue<V, R> {
   const { watches } = useRuntime();
   const handle = useContextHandle(options.context);
-  const json = JSON.stringify([spec, options.when ?? null]);
+  const json = JSON.stringify([spec, options.when ?? null, options.persist === true]);
   const [watch, setWatch] = useState<Watch | null>(null);
   useEffect(() => {
-    const [parsedSpec, when] = JSON.parse(json) as [ReadSpec, WatchOptions["when"] | null];
-    const opened = handle.watch(id, parsedSpec, when ? { when } : {});
+    const [parsedSpec, when, persist] = JSON.parse(json) as [ReadSpec, WatchOptions["when"] | null, boolean];
+    const opened = handle.watch(id, parsedSpec, { ...(when ? { when } : {}), ...(persist ? { persist } : {}) });
     const remove = watches.add(handle.id, opened);
     setWatch(opened);
     return () => {
@@ -177,6 +178,16 @@ export function useWatch<V = unknown, R = unknown>(id: string, spec: ReadSpec, o
   }, [handle, id, json, watches]);
   const value = useSyncExternalStore(watch ? watch.subscribe : noSubscribe, () => watch?.get() ?? EMPTY);
   return value as WatchValue<V, R>;
+}
+
+/**
+ * The status of a watch, to pick what a screen shows: a skeleton for `loading`, the empty state
+ * for `empty`, the data for `fresh` and `stale` (with a quiet refreshing mark for `stale`), and the
+ * error view for `failed`. It opens the watch as `useWatch` does and shares it with a `useWatch`
+ * of the same id and specification; `watchStatus(value)` gives the same for a value in hand.
+ */
+export function useWatchStatus(id: string, spec: ReadSpec, options: WatchOptions & { context?: string } = {}): DataStatus {
+  return watchStatus(useWatch(id, spec, options));
 }
 
 /**
@@ -469,6 +480,154 @@ export function useScrollMemory() {
   }, [scroll, router, key, context]);
 }
 
+// ---- Virtual list -------------------------------------------------------------------------------
+
+export interface VirtualListProps {
+  /** The rows' keys in order, such as a list watch's `order`. */
+  keys: readonly string[];
+  /** A row's expected height in pixels, used until the row has been measured. */
+  estimateHeight: number;
+  /**
+   * Renders one row. Keep it stable (`useCallback`) and let the row read its own record with
+   * `useRecord`, so scrolling and other rows' changes do not render it again.
+   */
+  renderItem(key: string): ReactNode;
+  /** Rows rendered beyond each edge of the visible area; 8 by default. */
+  overscan?: number;
+  className?: string;
+  /**
+   * Names the list, such as `"saved"` or `"feed:" + tab`. A named list keeps its measured row
+   * heights when it unmounts, so going Back to it restores the same scroll position even when
+   * rows differ in height. Without an id, heights are measured again on every mount.
+   */
+  id?: string;
+}
+
+/** Measured row heights of named lists, kept across mounts. The oldest list is dropped first. */
+const listHeights = new Map<string, Map<string, number>>();
+const LIST_HEIGHTS_MAX = 16;
+const LIST_ROWS_MAX = 2000;
+
+function keptHeights(id: string | undefined): Map<string, number> {
+  if (id === undefined) return new Map();
+  let heights = listHeights.get(id);
+  if (heights) listHeights.delete(id);
+  else heights = new Map();
+  listHeights.set(id, heights);
+  if (listHeights.size > LIST_HEIGHTS_MAX) listHeights.delete(listHeights.keys().next().value!);
+  return heights;
+}
+
+/**
+ * A long list that renders only the rows near the visible area, with spacers for the rest. It
+ * scrolls with its nearest scrolling ancestor, such as a `ScrollMemory` container, or the page.
+ * Rows are measured once rendered and skip their painting while off screen
+ * (`content-visibility: auto`).
+ */
+export function VirtualList({ keys, estimateHeight, renderItem, overscan = 8, className, id }: VirtualListProps) {
+  const list = useRef<HTMLDivElement>(null);
+  // The heights of the list `id` names now: a mounted list given another id reads that list's.
+  const heights = useMemo(() => keptHeights(id), [id]);
+  const [range, setRange] = useState(() => ({ start: 0, end: Math.min(keys.length, overscan * 2 + 16) }));
+  const [measured, setMeasured] = useState(0);
+  const heightOf = useCallback((key: string) => heights.get(key) ?? estimateHeight, [heights, estimateHeight]);
+
+  const update = useCallback(() => {
+    const element = list.current;
+    if (!element) return;
+    const scroller = scrollParent(element);
+    const viewTop = scroller ? scroller.getBoundingClientRect().top : 0;
+    const viewHeight = scroller ? scroller.clientHeight : innerHeight;
+    const top = viewTop - element.getBoundingClientRect().top;
+    let start = 0;
+    let offset = 0;
+    while (start < keys.length && offset + heightOf(keys[start]!) < top) offset += heightOf(keys[start++]!);
+    let end = start;
+    while (end < keys.length && offset < top + viewHeight) offset += heightOf(keys[end++]!);
+    const next = { start: Math.max(0, start - overscan), end: Math.min(keys.length, end + overscan) };
+    setRange(current => (current.start === next.start && current.end === next.end ? current : next));
+  }, [keys, heightOf, overscan]);
+
+  useLayoutEffect(update, [update, measured]);
+
+  useEffect(() => {
+    const element = list.current;
+    if (!element) return;
+    const scroller = scrollParent(element);
+    let frame = 0;
+    const onScroll = () => {
+      if (frame) return;
+      frame = requestAnimationFrame(() => { frame = 0; update(); });
+    };
+    const target: EventTarget = scroller ?? window;
+    target.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      cancelAnimationFrame(frame);
+      target.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
+    };
+  }, [update]);
+
+  // Rows report their real heights, so the spacers and the range follow them. Another list's
+  // heights get their own observer, which measures the rendered rows again.
+  const observer = useMemo(() => typeof ResizeObserver === "undefined" ? null : new ResizeObserver(entries => {
+    let changed = false;
+    for (const entry of entries) {
+      const key = (entry.target as HTMLElement).dataset.key;
+      const height = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).offsetHeight;
+      if (key === undefined || height === 0 || heights.get(key) === height) continue;
+      if (heights.size >= LIST_ROWS_MAX && !heights.has(key)) heights.delete(heights.keys().next().value!);
+      heights.set(key, height);
+      changed = true;
+    }
+    if (changed) setMeasured(count => count + 1);
+  }), [heights]);
+  useEffect(() => () => observer?.disconnect(), [observer]);
+
+  let before = 0;
+  for (let i = 0; i < range.start && i < keys.length; i++) before += heightOf(keys[i]!);
+  let after = 0;
+  for (let i = Math.min(range.end, keys.length); i < keys.length; i++) after += heightOf(keys[i]!);
+  return (
+    <div ref={list} className={className}>
+      <div style={{ height: before }} aria-hidden="true" />
+      {keys.slice(range.start, range.end).map(key =>
+        <VirtualRow key={key} rowKey={key} render={renderItem} estimate={estimateHeight} observer={observer} />)}
+      <div style={{ height: after }} aria-hidden="true" />
+    </div>
+  );
+}
+
+const VirtualRow = memo(function VirtualRow({ rowKey, render, estimate, observer }: {
+  rowKey: string;
+  render(key: string): ReactNode;
+  estimate: number;
+  observer: ResizeObserver | null;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element || !observer) return;
+    observer.observe(element);
+    return () => observer.unobserve(element);
+  }, [observer]);
+  return (
+    <div ref={ref} data-key={rowKey} style={{ contentVisibility: "auto", containIntrinsicSize: `auto ${estimate}px` }}>
+      {render(rowKey)}
+    </div>
+  );
+});
+
+/** The nearest ancestor that scrolls vertically, or null for the page. */
+function scrollParent(element: HTMLElement): HTMLElement | null {
+  for (let node = element.parentElement; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowY;
+    if (overflow === "auto" || overflow === "scroll" || overflow === "overlay") return node;
+  }
+  return null;
+}
+
 /** A scroll container that keeps its position per screen. */
 export function ScrollMemory(props: HTMLAttributes<HTMLDivElement>) {
   return <div {...props} ref={useScrollMemory()} />;
@@ -490,4 +649,5 @@ export { createRouter } from "./router/router.js";
 export type { CurrentScreen, NavigateTarget, Router, RouterOptions, RouterRoute, RouteStatus } from "./router/router.js";
 export type { ContextHandle, ContextState, Expect, PendingInput, Watch, WatchOptions } from "./client/context.js";
 export type { Genesis } from "./client/session.js";
-export type { WatchValue } from "./client/watch.js";
+export { watchStatus } from "./client/watch.js";
+export type { DataStatus, WatchValue } from "./client/watch.js";

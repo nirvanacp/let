@@ -24,6 +24,8 @@ import { checkedOf, collapse, compile, isVisible, readOnce, rectOf, textOf, type
 import { holds, runSequence, validateDeadline, validateEvidence, validateInput, validateSteps, type SequenceContext } from "./sequence.js";
 import { trackView, type ViewTracker } from "./view.js";
 import { createWatches } from "./watch.js";
+import { debug, startPageDebug } from "./debug.js";
+import { originPath } from "../debug.js";
 
 const READS = new Set(["info", "read", "inspect", "watch.open", "watch.close", "watch.resync", "wait"]);
 const INPUTS = new Set(["click", "longPress", "hover", "unhover", "focus", "blur", "fill", "type", "press", "select", "check", "scroll", "submit", "attachFiles"]);
@@ -88,12 +90,19 @@ interface Call {
 function serve(connection: Connection, module: PageModule | undefined, view: ViewTracker, received: FileReceiver): Session {
   const { limits, generation, compat } = connection.bound;
   view.bind(generation);
+  startPageDebug(connection);
+  if (debug.on) {
+    debug.add("agent.start", { generation, url: originPath(location.href), readers: Object.keys(module?.readers ?? {}).length, commands: Object.keys(module?.commands ?? {}).length });
+  }
   const calls = new Map<string, Call>();
   let queue: Promise<void> = Promise.resolve();
   let stopped = false;
 
   const answer = (callId: string, result: Omit<PageResultParams, "callId">) => {
-    if (!calls.delete(callId)) return;
+    const call = calls.get(callId);
+    if (!call) return;
+    calls.delete(callId);
+    if (debug.on) logResult(call, result);
     // Checked here, so a value the host would refuse answers an error now instead of the host's DEADLINE.
     const size = jsonBytes(result);
     const params: PageResultParams = size === null
@@ -165,6 +174,7 @@ function serve(connection: Connection, module: PageModule | undefined, view: Vie
         validateReadSpec(args.spec, "spec");
         if (args.when !== undefined) validateGuards(args.when, "when");
         watches.open(id, args.spec, args.when);
+        if (debug.on) debug.add("watch.open", { watch: id });
         return {};
       }
       case "watch.close":
@@ -173,7 +183,8 @@ function serve(connection: Connection, module: PageModule | undefined, view: Vie
         return {};
       case "watch.resync":
         if (args.id !== undefined && typeof args.id !== "string") throw new PageError("INVALID_ARGUMENT", "id must be a string");
-        watches.resync(args.id as string | undefined);
+        if (args.kept !== undefined && !(typeof args.id === "string" && isRecords(args.kept))) throw new PageError("INVALID_ARGUMENT", "kept must be the { key, data } records of the watch named by id");
+        watches.resync(args.id as string | undefined, args.kept as { key: string; data: unknown }[] | undefined);
         return {};
       case "wait": {
         const condition = args.for as Parameters<typeof holds>[0];
@@ -332,6 +343,7 @@ function serve(connection: Connection, module: PageModule | undefined, view: Vie
     for (const call of calls.values()) if (callId === undefined || call.event.callId === callId) call.cancelled = true;
   });
   connection.on("reset", () => {
+    if (debug.on) debug.add("reset", { calls: calls.size });
     watches.closeAll();
     for (const call of calls.values()) call.cancelled = true;
   });
@@ -340,6 +352,19 @@ function serve(connection: Connection, module: PageModule | undefined, view: Vie
   connection.on("pagehide", () => watches.stop());
 
   return { viewChanged: () => watches.viewChanged(), stop };
+}
+
+/** One answered call in the debug log: its operation, duration and error code or outcome. */
+function logResult(call: Call, result: Omit<PageResultParams, "callId">) {
+  const value = result.ok ? result.value : undefined;
+  const outcome = isObject(value) && typeof value.outcome === "string" ? value.outcome : undefined;
+  debug.add("op", {
+    op: call.event.op,
+    ...(call.event.op === "invoke" && typeof call.event.args?.command === "string" ? { command: call.event.args.command } : {}),
+    ms: Date.now() - call.arrived,
+    ok: result.ok,
+    ...(result.ok ? (outcome ? { outcome, code: (value as { code?: unknown }).code } : {}) : { code: result.error?.code }),
+  });
 }
 
 /** An input's arguments were invalid: the `failed` outcome, since input promises never reject. */
@@ -357,6 +382,11 @@ function jsonBytes(value: unknown): number | null {
   } catch {
     return null;
   }
+}
+
+/** List records as a watch keeps them: `{ key, data }` with a string key. */
+function isRecords(value: unknown): boolean {
+  return Array.isArray(value) && value.every(record => isObject(record) && typeof record.key === "string" && "data" in record);
 }
 
 function isObject(value: unknown): value is { [key: string]: any } {
