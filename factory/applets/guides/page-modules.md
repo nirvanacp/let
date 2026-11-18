@@ -151,6 +151,8 @@ The agent watches each item element and its descendants. When `read` uses other 
 - `fields: true` reads again on `input` and `change` events inside the root, so a form reader reports what is typed. Form values are properties, not DOM, so without it typing goes unnoticed.
 - `measure: true` reads again when an element of the reader changes size, for reads that depend on layout, such as which photo of a carousel is in view.
 
+Every reader of a watch also reads again once the page is parsed (`DOMContentLoaded`), so a readiness reader may test `document.readyState !== "loading"`.
+
 ```ts
 const compose = one({ root: "#co_", dependsOn: ["#cmcbcc"], fields: true, read: readCompose });
 const photo = one({ root: "[data-testid=swipe-to-dismiss]", measure: true, read: readPhoto });

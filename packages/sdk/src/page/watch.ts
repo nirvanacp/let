@@ -84,6 +84,7 @@ export function createWatches(host: WatchHost): Watches {
   const { limits } = host;
   const watches = new Map<string, Watch>();
   let pending: Change[] = [];
+  /** The next batch reads every watch again instead of following `pending`. */
   let overflow = false;
   let observer: Observer | null = null;
   let stopped = false;
@@ -105,7 +106,16 @@ export function createWatches(host: WatchHost): Watches {
       }
       batch.schedule();
     });
-    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => batch.schedule(), { once: true });
+    // A reader can depend on `document.readyState`, and parsing can end without another DOM change
+    // (a script that blocks the end of the page), so every watch reads again once the page is parsed.
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", () => {
+        if (!observer) return;
+        pending = [];
+        overflow = true;
+        batch.schedule();
+      }, { once: true });
+    }
   }
 
   function stopObserving() {
