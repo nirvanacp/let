@@ -83,10 +83,11 @@ export interface WatchStoreOptions {
   /** History entries whose last ready copy the store keeps. */
   historyEntriesMax: number;
   /**
-   * How long a cached value stays on show after the page's own read came back empty. A website
-   * often renders its content after the first read, and no message says that an empty page is
-   * done, so a context passes the time a page has to become ready (`limits.documentReadyMs`).
-   * Without it, an empty read shows at once.
+   * How long stale data stays on show after the page's own read came back empty: a cached value,
+   * the copy of a history entry after Back, or the last data during a reload. A website often
+   * renders its content after the first read, and no message says that an empty page is done, so
+   * a context passes the time a page has to become ready (`limits.documentReadyMs`). Without it,
+   * an empty read shows at once.
    */
   emptyHoldMs?: number;
 }
@@ -128,17 +129,16 @@ export function emptyWatchValue(): WatchValue {
  * keeps the last ready copy of each history entry (at most `historyEntriesMax`), so Back shows
  * the entry at once, marked `stale`, until the new document sends its snapshot.
  *
- * A cached value stays on show while the page's own read is empty: until that read has data, the
- * watch goes idle or fails, the page changes, or `emptyHoldMs` pass. It does so too when it
- * arrives after that empty read.
+ * Stale data (a cached value, a history copy, the last data of a page that loads again) stays on
+ * show while the page's own read is empty: until that read has data, the watch goes idle or
+ * fails, the page changes, or `emptyHoldMs` pass. A cached value does so too when it arrives
+ * after that empty read.
  */
 export function createWatchStore(options: WatchStoreOptions): WatchStore {
   const emptyHoldMs = options.emptyHoldMs ?? 0;
-  /** The watch's own state. `get()` returns `held` instead while a cached value is on show. */
+  /** The watch's own state. `get()` returns `held` instead while stale data is on show. */
   let current = emptyWatchValue();
-  /** The value of the last cached snapshot, until the page's stream replaces it. */
-  let cached: WatchValue | null = null;
-  /** The cached value on show while `current`, the page's own read, is still empty. */
+  /** The stale data on show while `current`, the page's own read, is still empty. */
   let held: WatchValue | null = null;
   let holdTimer: ReturnType<typeof setTimeout> | null = null;
   /** The stream position of the last applied message; null until a snapshot starts it. */
@@ -157,17 +157,16 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
 
   function set(next: WatchValue) {
     if (same(next, current)) return;
-    // An empty read of a page that may not have rendered yet does not replace cached data.
-    const hold = emptyHoldMs > 0 && emptyRead(next) && (held !== null || showsCached());
+    // An empty read of a page that may not have rendered yet does not replace stale data.
+    const hold = emptyHoldMs > 0 && emptyRead(next) && (held !== null || (current.stale && hasData(current)));
     const shown = held ?? current;
-    if (!next.stale) cached = null;
     current = next;
-    remember();
     if (hold) {
       held = shown;
       holdTimer ??= setTimeout(settle, emptyHoldMs);
       return;
     }
+    remember();
     release();
     announce();
   }
@@ -176,12 +175,6 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
   function announce() {
     if (batchDepth > 0) heldNotifications.add(notify);
     else notify();
-  }
-
-  /** `current` still shows the data of the last cached snapshot, whatever happened to its status. */
-  function showsCached() {
-    return cached !== null && current.stale && hasData(current)
-      && current.order === cached.order && current.records === cached.records && current.value === cached.value;
   }
 
   function release() {
@@ -193,6 +186,7 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
   /** The page had its time to render: its empty read is the value. */
   function settle() {
     release();
+    remember();
     notify();
   }
 
@@ -275,9 +269,7 @@ export function createWatchStore(options: WatchStoreOptions): WatchStore {
         }
         // Otherwise a kept value fills in only until the page's own stream starts, and stays stale.
         if (stream || (current.status === "ready" && !current.stale)) return "ignored";
-        const value = { ...snapshot(event, event.data as WatchSnapshot), stale: true };
-        set(value);
-        cached = value;
+        set({ ...snapshot(event, event.data as WatchSnapshot), stale: true });
         return "applied";
       }
       if (kind === "patch") {

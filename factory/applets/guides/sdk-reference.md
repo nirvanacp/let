@@ -152,7 +152,7 @@ if (result.outcome !== "observed") console.warn(result.code, result.message);
 | Export | Signature | Purpose |
 | --- | --- | --- |
 | `WatchValue` | interface | `{ status, idle, stale, value, order, records, error, truncated, complete, view, updatedAt }`. `value` holds a `one` or `value` read, and `order` and `records` hold a list. `complete` is `false` while a list's "more" link is present. `updatedAt` is when the data last changed, in epoch milliseconds. A value Genesis kept from an earlier visit shows at once as `ready` and `stale`, with its `updatedAt`, until the page's own snapshot. |
-| `createWatchStore` | `createWatchStore({ historyEntriesMax, emptyHoldMs? }): WatchStore` | The client side of one watch stream. `ContextHandle.watch` uses it, and a custom transport or test can too. `emptyHoldMs` is how long a kept value stays on show after the page's own read came back empty; a context passes `limits.documentReadyMs`. |
+| `createWatchStore` | `createWatchStore({ historyEntriesMax, emptyHoldMs? }): WatchStore` | The client side of one watch stream. `ContextHandle.watch` uses it, and a custom transport or test can too. `emptyHoldMs` is how long stale data (a kept value, a history copy after Back, the last data during a reload) stays on show after the page's own read came back empty; a context passes `limits.documentReadyMs`. |
 | `WatchStore` | interface | `get`, `subscribe`, `emit`, `navigated`, `gone` and the other entry points of a stream. |
 | `EmitResult` | `"applied" \| "ignored" \| "resync"` | What `WatchStore.emit` did with a message. |
 | `emptyWatchValue` | `emptyWatchValue(): WatchValue` | The `loading` value before the first snapshot. |
