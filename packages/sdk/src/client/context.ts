@@ -85,6 +85,11 @@ export interface PendingInput {
 export interface WatchOptions {
   /** The watch reads only while the URL matches one of these. */
   when?: UrlGuard[];
+  /**
+   * Genesis also keeps the watch's last value on the phone, for up to 7 days, and shows it, marked
+   * `stale`, when the applet starts again, until the page reads. Part of the watch's specification.
+   */
+  persist?: boolean;
 }
 
 /** One open watch: its value follows the page, and survives navigations as described in `watch.ts`. */
@@ -182,8 +187,8 @@ export interface ContextHandle {
   /** Asks every open watch for a fresh snapshot. */
   resync(): void;
   /**
-   * Forgets every copy the watches kept of this context's pages, so none shows after the account
-   * changed; with `current`, also the data shown now. Pending inputs settle as `unknown` with
+   * Forgets every copy the watches and Genesis kept of this context's pages, so none shows after
+   * the account changed; with `current`, also the data shown now. Pending inputs settle as `unknown` with
    * `CONTEXT_REPLACED`, unless `keepInputs` is set.
    */
   forget(options?: { current?: boolean; keepInputs?: boolean }): void;
@@ -242,6 +247,7 @@ interface WatchEntry {
   specJson: string;
   spec: ReadSpec;
   when?: UrlGuard[];
+  persist: boolean;
   store: WatchStore;
   handle: Watch;
   refs: number;
@@ -521,6 +527,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     }
     const params: Record<string, unknown> = { context: id, id: entry.id, spec: entry.spec };
     if (entry.when) params.when = entry.when;
+    if (entry.persist) params.persist = true;
     session.request("watch.subscribe", params).catch(error => {
       if (error instanceof GenesisError && error.code === "RETIRED") return;
       entry.subscribed = false;
@@ -555,7 +562,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
   function watch(watchId: string, spec: ReadSpec, options: WatchOptions = {}): Watch {
     validateReadSpec(spec, "spec");
     if (options.when) validateGuards(options.when, "when");
-    const specJson = JSON.stringify([spec, options.when ?? null]);
+    const specJson = JSON.stringify([spec, options.when ?? null, options.persist === true]);
     // Another specification under a closing id: the page closes the old watch before it opens the new one.
     if (watches.get(watchId)?.closing && watches.get(watchId)!.specJson !== specJson) closeWatches();
     const existing = watches.get(watchId);
@@ -573,7 +580,7 @@ export function createContext(id: string, startUrl: string, session: Session): C
     const store = createWatchStore({ historyEntriesMax: limits.historyEntriesMax });
     if (lastNavigation) store.at(lastNavigation);
     const entry: WatchEntry = {
-      id: watchId, specJson, spec, when: options.when, store, refs: 1, subscribed: false, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
+      id: watchId, specJson, spec, when: options.when, persist: options.persist === true, store, refs: 1, subscribed: false, lastResync: 0, resyncTimer: null, closing: false, openedAt: 0,
       handle: {
         id: watchId,
         get: store.get,
@@ -618,6 +625,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
 
   function forget(options: { current?: boolean; keepInputs?: boolean } = {}) {
     for (const entry of watches.values()) entry.store.forget(options.current === true);
+    // Genesis's own copies of the pages, too, so none shows on the next start.
+    session.request("store.forget", { context: id }).catch(fail("store.forget"));
     if (options.keepInputs) return;
     for (const record of [...inputs.values()]) {
       record.abort?.();

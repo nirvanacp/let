@@ -162,11 +162,11 @@ const EMPTY = emptyWatchValue();
 export function useWatch<V = unknown, R = unknown>(id: string, spec: ReadSpec, options: WatchOptions & { context?: string } = {}): WatchValue<V, R> {
   const { watches } = useRuntime();
   const handle = useContextHandle(options.context);
-  const json = JSON.stringify([spec, options.when ?? null]);
+  const json = JSON.stringify([spec, options.when ?? null, options.persist === true]);
   const [watch, setWatch] = useState<Watch | null>(null);
   useEffect(() => {
-    const [parsedSpec, when] = JSON.parse(json) as [ReadSpec, WatchOptions["when"] | null];
-    const opened = handle.watch(id, parsedSpec, when ? { when } : {});
+    const [parsedSpec, when, persist] = JSON.parse(json) as [ReadSpec, WatchOptions["when"] | null, boolean];
+    const opened = handle.watch(id, parsedSpec, { ...(when ? { when } : {}), ...(persist ? { persist } : {}) });
     const remove = watches.add(handle.id, opened);
     setWatch(opened);
     return () => {

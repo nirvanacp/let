@@ -159,6 +159,11 @@ export interface Genesis {
   readonly contextIds: readonly string[];
   /** A context by id; the first context by default. */
   context(id?: string): ContextHandle;
+  /**
+   * Forgets the page values Genesis kept to show before a page reads, in memory and on the
+   * phone: those of one context, or of every context. Watches keep the data they show now.
+   */
+  forgetCached(contextId?: string): Promise<void>;
   readonly website: Website;
   /**
    * Handles Android Back. The latest handler runs first; the first that returns true consumes
@@ -270,6 +275,10 @@ function createGenesis(session: Session): Genesis {
       const context = contexts.get(id);
       if (!context) throw new GenesisError("NOT_FOUND", `No context ${id}`);
       return context.handle;
+    },
+    async forgetCached(contextId) {
+      if (contextId !== undefined && !contexts.has(contextId)) throw new GenesisError("NOT_FOUND", `No context ${contextId}`);
+      await session.request("store.forget", contextId === undefined ? {} : { context: contextId });
     },
     website,
     onBack,
