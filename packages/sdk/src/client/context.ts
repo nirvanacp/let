@@ -582,8 +582,11 @@ export function createContext(id: string, startUrl: string, session: Session): C
     // The page agent decides whether the watch reads a virtualized list: a page-module reader
     // carries that flag in the page, not in the spec this client holds.
     if (!state.bound || !entry.subscribed || entry.refs === 0) return;
-    const kept = entry.store.takeReturned();
+    let kept = entry.store.takeReturned();
     if (!kept) return;
+    // The page keeps at most `limit` records of a list, so it is sent no more: the newest ones.
+    const limit = "list" in entry.spec ? entry.spec.limit : undefined;
+    if (limit !== undefined && kept.length > limit) kept = kept.slice(-limit);
     if (debug.on) debug.add("watch.continue", { context: id, watch: entry.id, records: kept.length });
     // Advice: without it the list starts over with the rows on the page.
     send("watch.resync", { id: entry.id, kept }).catch(() => {});
@@ -657,6 +660,8 @@ export function createContext(id: string, startUrl: string, session: Session): C
   function closeWatches() {
     if (closeTimer) clearTimeout(closeTimer);
     closeTimer = null;
+    // Emits that arrived before the close still belong to the watch's kept copies.
+    drainEmits();
     for (const entry of [...watches.values()]) {
       if (!entry.closing) continue;
       entry.closing = false;

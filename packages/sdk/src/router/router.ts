@@ -69,7 +69,10 @@ export interface RouterOptions {
   /**
    * `true` runs each screen change inside a View Transition where the engine has them and the
    * person has not asked for reduced motion, so the screens cross-fade. Off by default, because an
-   * applet with its own screen animation would animate every change twice.
+   * applet with its own screen animation would animate every change twice. The transition
+   * captures the new screen one `setTimeout(0)` after the router tells its listeners, so it
+   * assumes the UI library renders a state change at once or within that task, as React does
+   * for store updates. A library that renders later cross-fades to the old screen.
    */
   viewTransitions?: boolean;
 }

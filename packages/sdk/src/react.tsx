@@ -526,11 +526,11 @@ function keptHeights(id: string | undefined): Map<string, number> {
  */
 export function VirtualList({ keys, estimateHeight, renderItem, overscan = 8, className, id }: VirtualListProps) {
   const list = useRef<HTMLDivElement>(null);
-  const [kept] = useState(() => keptHeights(id));
-  const heights = useRef(kept);
+  // The heights of the list `id` names now: a mounted list given another id reads that list's.
+  const heights = useMemo(() => keptHeights(id), [id]);
   const [range, setRange] = useState(() => ({ start: 0, end: Math.min(keys.length, overscan * 2 + 16) }));
   const [measured, setMeasured] = useState(0);
-  const heightOf = useCallback((key: string) => heights.current.get(key) ?? estimateHeight, [estimateHeight]);
+  const heightOf = useCallback((key: string) => heights.get(key) ?? estimateHeight, [heights, estimateHeight]);
 
   const update = useCallback(() => {
     const element = list.current;
@@ -569,19 +569,20 @@ export function VirtualList({ keys, estimateHeight, renderItem, overscan = 8, cl
     };
   }, [update]);
 
-  // Rows report their real heights, so the spacers and the range follow them.
+  // Rows report their real heights, so the spacers and the range follow them. Another list's
+  // heights get their own observer, which measures the rendered rows again.
   const observer = useMemo(() => typeof ResizeObserver === "undefined" ? null : new ResizeObserver(entries => {
     let changed = false;
     for (const entry of entries) {
       const key = (entry.target as HTMLElement).dataset.key;
       const height = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).offsetHeight;
-      if (key === undefined || height === 0 || heights.current.get(key) === height) continue;
-      if (heights.current.size >= LIST_ROWS_MAX && !heights.current.has(key)) heights.current.delete(heights.current.keys().next().value!);
-      heights.current.set(key, height);
+      if (key === undefined || height === 0 || heights.get(key) === height) continue;
+      if (heights.size >= LIST_ROWS_MAX && !heights.has(key)) heights.delete(heights.keys().next().value!);
+      heights.set(key, height);
       changed = true;
     }
     if (changed) setMeasured(count => count + 1);
-  }), []);
+  }), [heights]);
   useEffect(() => () => observer?.disconnect(), [observer]);
 
   let before = 0;
