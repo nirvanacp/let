@@ -447,6 +447,13 @@ export interface PageEmitParams {
 export interface PageEmitEvent extends PageEmitParams {
   context: string;
   generation: number;
+  /**
+   * A snapshot the host kept from an earlier visit, sent before the page's own: it carries no
+   * stream position, and `view` and `url` name the context's current URL.
+   */
+  cached?: boolean;
+  /** Epoch milliseconds when the cached value last changed. */
+  at?: number;
 }
 
 /** Data of the foreground event `context.bound`: a page agent in the context accepts calls. */
