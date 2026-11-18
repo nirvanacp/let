@@ -70,9 +70,10 @@ body { font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; 
 button, input, textarea, select { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 button { margin: 0; padding: 0; border: 0; background: none; cursor: pointer; }
 button, .row, .tab { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+a, [role="button"], .row, .tab { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
 button:disabled { cursor: default; opacity: .5; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-img { display: block; max-width: 100%; }
+img { display: block; max-width: 100%; height: auto; } /* width and height attributes reserve the box */
 
 /* App frame: one content area that holds the stages, and the tab bar under it. */
 .app { position: fixed; inset: 0; display: flex; flex-direction: column; }
@@ -86,15 +87,18 @@ img { display: block; max-width: 100%; }
 .top-bar { display: flex; align-items: center; gap: 4px; min-height: 56px; padding: 4px var(--menu-corner) 4px 4px; }
 .top-bar h1 { flex: 1; margin: 0; font-size: 20px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* Pressed states answer every tap at once. */
-.row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 12px var(--edge); text-align: start; transition: background-color var(--dur-short); }
-.row:active { background: var(--press); }
-.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 18px; border-radius: 999px; font-weight: 600; transition: transform var(--dur-short) var(--ease-out), background-color var(--dur-short); }
+/* Pressed states answer every tap at once. They change only transform and opacity: the press layer is a
+   pseudo-element that fades in, so a tap never repaints the row or runs layout. */
+.row, .icon-button { position: relative; }
+.row::after, .icon-button::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--press); opacity: 0; transition: opacity var(--dur-short); pointer-events: none; }
+.row:active::after, .icon-button:active:not(:disabled)::after { opacity: 1; transition-duration: 0s; }
+.row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 12px var(--edge); text-align: start; }
+.button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 18px; border-radius: 999px; font-weight: 600; transition: transform var(--dur-short) var(--ease-out); }
 .button.primary { background: var(--accent); color: var(--on-accent); }
 .button.secondary { background: var(--surface); }
 .button:active:not(:disabled) { transform: scale(.97); }
-.icon-button { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; transition: background-color var(--dur-short), transform var(--dur-short) var(--ease-out); }
-.icon-button:active:not(:disabled) { background: var(--press); transform: scale(.92); }
+.icon-button { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; transition: transform var(--dur-short) var(--ease-out); }
+.icon-button:active:not(:disabled) { transform: scale(.92); }
 .icon-button svg, .website-cue { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .icon-button svg { width: 24px; height: 24px; }
 
@@ -104,9 +108,11 @@ img { display: block; max-width: 100%; }
 .tab[aria-current="page"] { color: var(--ink); font-weight: 600; }
 
 /* Skeletons fade in after a moment, so fast loads never flash, then shimmer.
-   Only .sk paints and animates; shape classes set size only, so no selector can outrank the shimmer. */
+   Only .sk paints and animates; shape classes set size only, so no selector can outrank the shimmer.
+   The shine is a pseudo-element moved by transform, which the compositor runs without repainting. */
 .skeleton { animation: fade .2s .12s both; }
-.sk { display: block; border-radius: 6px; background: linear-gradient(90deg, var(--skeleton) 0 40%, var(--shimmer) 50%, var(--skeleton) 60% 100%) var(--skeleton); background-size: 300% 100%; animation: shimmer 1.4s linear infinite; }
+.sk { position: relative; display: block; overflow: hidden; border-radius: 6px; background: var(--skeleton); }
+.sk::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--shimmer), transparent); transform: translateX(-100%); animation: shimmer 1.4s linear infinite; }
 .sk-line { height: 12px; }
 .sk-title { height: 20px; border-radius: 8px; }
 .sk-avatar { flex: none; width: 40px; height: 40px; border-radius: 50%; }
@@ -145,7 +151,7 @@ img { display: block; max-width: 100%; }
 
 @keyframes fade { from { opacity: 0; } }
 @keyframes rise { from { transform: translateY(100%); } }
-@keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@keyframes shimmer { to { transform: translateX(100%); } }
 @keyframes progress { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes toast-in { from { opacity: 0; transform: translateY(24px) scale(.96); } }
@@ -159,6 +165,10 @@ img { display: block; max-width: 100%; }
 ```
 
 Reduced motion sets durations to zero instead of `animation: none`, so an animation with `forwards` or `both` still lands on its end state and `animationend` still fires. The stage reads the setting itself, because the Web Animations API ignores CSS.
+
+Every image in a screen carries its `width` and `height` (the website's values, or the slot's size), `loading="lazy"` and `decoding="async"`, so the box is reserved before the file arrives and decoding stays off the main thread: `<img src={item.image} width={64} height={64} loading="lazy" decoding="async" alt="" />`. An image in the first screenful may drop `loading="lazy"`.
+
+The stage owns screen motion, so an applet built on it leaves the router's `viewTransitions` option off. An applet without a stage can pass `viewTransitions: true` for a short cross-fade instead.
 
 ## Motion stage
 

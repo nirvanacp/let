@@ -135,7 +135,7 @@ function App() {
   return screen?.id === "home" ? <Home /> : null;
 }
 
-void mount(<App />, { router: { routes: ROUTES } });
+void mount(<App />, { router: { routes: ROUTES, viewTransitions: true } });
 `;
 
 const VANILLA_MAIN = `import { connect, record, type WatchValue } from "@let/sdk";
@@ -185,7 +185,7 @@ function home(value: WatchValue<never, Link>, click: (key: string) => Promise<un
 
 async function start() {
   const genesis = await connect();
-  const router = createRouter(genesis, { routes: ROUTES });
+  const router = createRouter(genesis, { routes: ROUTES, viewTransitions: true });
   const primary = genesis.context("primary");
   const links = primary.watch<never, Link>(LINKS, { reader: "links" }, { when: HOME_PAGES });
   // A click on the website's own link; the destination's route decides what shows.
@@ -221,7 +221,16 @@ html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink
 .links { list-style: none; margin: 0; padding: 0; }
 .links li { border-bottom: 1px solid var(--line); }
 .links button { all: unset; display: block; width: 100%; padding: 12px 0; cursor: pointer; }
+/* No double-tap zoom delay on controls. Pressed states change only transform and opacity, which skip layout and paint. */
+button, a, [role="button"] { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.links button { transition: opacity .15s; }
+.links button:active:not(:disabled) { opacity: .55; transition-duration: 0s; }
 button:focus-visible { outline: 2px solid var(--genesis-accent, #2f6fde); }
+/* Images reserve their box from width and height, so a late load never shifts the list. */
+img { max-width: 100%; height: auto; }
+/* Screen changes cross-fade briefly (the router's viewTransitions option). */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0s !important; transition-duration: 0s !important; } }
 `;
 
 const TEMPLATES = {

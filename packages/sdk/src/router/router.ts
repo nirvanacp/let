@@ -67,8 +67,9 @@ export interface RouterOptions {
   /** Replaces the default presentation rules: whether a context shows the applet (`custom`) or its website. */
   decide?: (context: CoordinatorContext, route: TableRoute | null) => Presentation;
   /**
-   * A screen change runs inside a View Transition where the engine has them and the person has not
-   * asked for reduced motion, so the screens cross-fade. `false` turns it off. True by default.
+   * `true` runs each screen change inside a View Transition where the engine has them and the
+   * person has not asked for reduced motion, so the screens cross-fade. Off by default, because an
+   * applet with its own screen animation would animate every change twice.
    */
   viewTransitions?: boolean;
 }
@@ -223,7 +224,7 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
   }
 
   function canTransition() {
-    if (options.viewTransitions === false || destroyed || typeof document === "undefined") return false;
+    if (options.viewTransitions !== true || destroyed || typeof document === "undefined") return false;
     if (typeof document.startViewTransition !== "function" || document.visibilityState !== "visible") return false;
     return !(typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches);
   }
