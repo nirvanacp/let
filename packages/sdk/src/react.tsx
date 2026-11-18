@@ -495,6 +495,27 @@ export interface VirtualListProps {
   /** Rows rendered beyond each edge of the visible area; 8 by default. */
   overscan?: number;
   className?: string;
+  /**
+   * Names the list, such as `"saved"` or `"feed:" + tab`. A named list keeps its measured row
+   * heights when it unmounts, so going Back to it restores the same scroll position even when
+   * rows differ in height. Without an id, heights are measured again on every mount.
+   */
+  id?: string;
+}
+
+/** Measured row heights of named lists, kept across mounts. The oldest list is dropped first. */
+const listHeights = new Map<string, Map<string, number>>();
+const LIST_HEIGHTS_MAX = 16;
+const LIST_ROWS_MAX = 2000;
+
+function keptHeights(id: string | undefined): Map<string, number> {
+  if (id === undefined) return new Map();
+  let heights = listHeights.get(id);
+  if (heights) listHeights.delete(id);
+  else heights = new Map();
+  listHeights.set(id, heights);
+  if (listHeights.size > LIST_HEIGHTS_MAX) listHeights.delete(listHeights.keys().next().value!);
+  return heights;
 }
 
 /**
@@ -503,9 +524,10 @@ export interface VirtualListProps {
  * Rows are measured once rendered and skip their painting while off screen
  * (`content-visibility: auto`).
  */
-export function VirtualList({ keys, estimateHeight, renderItem, overscan = 8, className }: VirtualListProps) {
+export function VirtualList({ keys, estimateHeight, renderItem, overscan = 8, className, id }: VirtualListProps) {
   const list = useRef<HTMLDivElement>(null);
-  const heights = useRef(new Map<string, number>());
+  const [kept] = useState(() => keptHeights(id));
+  const heights = useRef(kept);
   const [range, setRange] = useState(() => ({ start: 0, end: Math.min(keys.length, overscan * 2 + 16) }));
   const [measured, setMeasured] = useState(0);
   const heightOf = useCallback((key: string) => heights.current.get(key) ?? estimateHeight, [estimateHeight]);
@@ -554,6 +576,7 @@ export function VirtualList({ keys, estimateHeight, renderItem, overscan = 8, cl
       const key = (entry.target as HTMLElement).dataset.key;
       const height = entry.borderBoxSize?.[0]?.blockSize ?? (entry.target as HTMLElement).offsetHeight;
       if (key === undefined || height === 0 || heights.current.get(key) === height) continue;
+      if (heights.current.size >= LIST_ROWS_MAX && !heights.current.has(key)) heights.current.delete(heights.current.keys().next().value!);
       heights.current.set(key, height);
       changed = true;
     }
