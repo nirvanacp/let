@@ -5,6 +5,12 @@ export { debug } from "../debug.js";
 
 /** An animation frame longer than this is logged. */
 const LONG_FRAME_MS = 100;
+/**
+ * Frames this soon after the document becomes visible are not logged: a covered applet page is
+ * woken for each message it gets, its first frames catch up on work, and logging them would send
+ * another message that wakes it again.
+ */
+const SHOWN_GRACE_MS = 1000;
 
 /**
  * Starts the UI document's debug log when the user has the applet's log on: batches go to the
@@ -23,9 +29,11 @@ export function startClientDebug(session: Session): void {
     debug.add("rejection", { message: cut(reason instanceof Error ? reason.message : reason), code: (reason as { code?: unknown } | null)?.code });
   });
   if (typeof PerformanceObserver === "undefined" || !PerformanceObserver.supportedEntryTypes?.includes("long-animation-frame")) return;
+  let shownAt = -Infinity;
+  addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") shownAt = performance.now(); });
   new PerformanceObserver(list => {
     for (const entry of list.getEntries()) {
-      if (entry.duration <= LONG_FRAME_MS) continue;
+      if (entry.duration <= LONG_FRAME_MS || entry.startTime < shownAt + SHOWN_GRACE_MS) continue;
       const blocking = (entry as PerformanceEntry & { blockingDuration?: number }).blockingDuration;
       debug.add("frame.long", { ms: Math.round(entry.duration), ...(blocking === undefined ? {} : { blockingMs: Math.round(blocking) }) });
     }
