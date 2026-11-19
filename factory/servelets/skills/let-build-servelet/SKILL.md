@@ -14,7 +14,7 @@ Read [../../AGENTS.md](../../AGENTS.md) first. Use this skill when an app's own 
 5. **Implement.** Replace the example `notes` resource in `store.go` with the records: schema steps, input structs with validation, handlers, transactions for multi-row writes. Register the routes in `main.go`. Keep the health route.
 6. **Write `checks.json`.** One request per route, each 400 rule, each 409 conflict and a repeated create ([verification](../../guides/verification.md)).
 7. **Check.** `npx let-servelet check <directory>` until it passes. `check` compares statuses only, so confirm response bodies, such as search results and order, with `let-servelet run` and `curl`.
-8. **Connect the applet.** In the applet, add `service.json` with `{ "serviceId": "<service id>", "runtime": "local", "servelet": "<id>" }` and declare it in `capabilities.services`. Run `npm run check` and `npm run build` there; afterwards `dist/servelets/<service id>/servelet.wasm` exists.
+8. **Connect the applet.** In the applet, add `service.json` with `{ "serviceId": "<service id>", "runtime": "local", "servelet": "<id>" }` and declare it in `capabilities.services`. Run `npm run check` and `npm run build` there; afterwards `dist/revision/servelets/<service id>/servelet.wasm` exists.
 9. **Hand over the route table.** The applet calls the routes with `genesis.services.request` or `useService`, exactly as the README says. Build the applet's screens with the applet build skill against that table, and check the journeys on a device.
 10. **Records and commit.** Keep the servelet's README current, record the product decisions and evidence in the applet's records, and commit the servelet in the servelets repository and the applet in the applets repository.
 
