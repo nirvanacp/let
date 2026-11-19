@@ -10,7 +10,7 @@ Name, applet id, origins, context ids, screen ids and service ids. Write "unknow
 | Bundle format | 3 |
 | Protocol | 2 |
 | Page control API (`adapterApi`) | 1 |
-| SDK and tools | 0.0.0 |
+| SDK and tools | 0.1.0-alpha.1 |
 | Kit | `frameworkVersion` from `kit.json` |
 
 ## Product scope

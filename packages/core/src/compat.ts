@@ -17,4 +17,4 @@ export const COMPAT = {
 export type Compat = typeof COMPAT;
 
 /** The version of @nirvanacp/core, @nirvanacp/sdk, @nirvanacp/applet-tools and the kit. */
-export const FRAMEWORK_VERSION = "0.0.0";
+export const FRAMEWORK_VERSION = "0.1.0-alpha.1";

@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,8 +9,17 @@ export function toolError(code, message) { return Object.assign(new Error(messag
 
 /** The Let checkout these tools belong to: the Go library and the templates sit beside the packages. */
 export const LET_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-export const GO_LIBRARY = path.join(LET_ROOT, 'go', 'servelet');
-export const TEMPLATES = path.join(LET_ROOT, 'factory', 'servelets', 'templates');
+/** The package directory. A packed package carries its own `go/servelet` and `templates` (see prepare-package.mjs). */
+const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
+
+/** The package's own copy of `own` when it exists, otherwise `repository` in the Let checkout. */
+function packagedOr(own, repository) {
+  const packaged = path.join(PACKAGE_ROOT, own);
+  return existsSync(packaged) ? packaged : path.join(LET_ROOT, repository);
+}
+
+export const GO_LIBRARY = packagedOr(path.join('go', 'servelet'), path.join('go', 'servelet'));
+export const TEMPLATES = packagedOr('templates', path.join('factory', 'servelets', 'templates'));
 
 async function isDirectory(directory) {
   try { return (await stat(directory)).isDirectory(); } catch { return false; }

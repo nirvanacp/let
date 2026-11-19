@@ -109,8 +109,8 @@ hn-vue/
   "private": true,
   "type": "module",
   "scripts": { "check": "genesis-applet check .", "build": "genesis-applet build ." },
-  "dependencies": { "@nirvanacp/sdk": "0.0.0", "vue": "3.5.45" },
-  "devDependencies": { "@nirvanacp/applet-tools": "0.0.0", "@vitejs/plugin-vue": "6.0.11", "vite": "8.3.8" }
+  "dependencies": { "@nirvanacp/sdk": "0.1.0-alpha.1", "vue": "3.5.45" },
+  "devDependencies": { "@nirvanacp/applet-tools": "0.1.0-alpha.1", "@vitejs/plugin-vue": "6.0.11", "vite": "8.3.8" }
 }
 ```
 
