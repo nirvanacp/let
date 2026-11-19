@@ -1,6 +1,6 @@
 // CI steps for applet repositories, run by the reusable workflows in the Let repository from tools
 // installed with npm ci in the applet repository.
-import { appendFile, copyFile, mkdir, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { validateReleaseRecord } from '@nirvanacp/core';
 import { TOOLS_VERSION } from './compat.mjs';
@@ -54,7 +54,8 @@ export async function ciVerify({ source = '.', path: relative, servelets }) {
 export async function ciAssets(options) {
   const relative = options.path;
   const from = path.resolve(options.source ?? '.', relative);
-  const { manifest } = await readApplet(from);
+  // Only the id: reading the whole manifest would also look up the servelets, which this job has no copy of.
+  const manifest = JSON.parse(await readFile(path.join(from, 'applet.json'), 'utf8'));
   const published = await readPublished(from, manifest.id);
   requireValue(published?.current, `${path.join(relative, PUBLISHED)} has no current release of ${manifest.id}`);
   const id = Number(options['repository-id']);

@@ -35,7 +35,7 @@ export async function listRepository(directory) {
  */
 export async function releaseApplet(directory, { dryRun = false, servelets } = {}) {
   const { root, layout, applet, warnings } = await findRepository(directory);
-  const { manifest } = await readApplet(applet.directory);
+  const { manifest } = await readApplet(applet.directory, { servelets });
   const status = git(root, ['status', '--porcelain']);
   requireValue(!status, `The repository ${root} has uncommitted changes; commit them first:\n${status}`);
 

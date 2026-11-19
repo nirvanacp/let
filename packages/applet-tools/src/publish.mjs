@@ -86,7 +86,7 @@ const recordText = record => JSON.stringify(record, null, 2) + '\n';
 
 /** Builds a release bundle into a temporary directory and returns its bytes and record. */
 async function buildRelease(base, { builtAt, home, servelets }) {
-  const { manifest } = await readApplet(base);
+  const { manifest } = await readApplet(base, { servelets });
   const pkg = await readPackage(base);
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'genesis-publish-'));
   try {
