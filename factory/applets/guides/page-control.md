@@ -184,8 +184,8 @@ Input operations act on the page as a user would. Each answers an `ActionResult`
 
 | Method | What it sends |
 | --- | --- |
-| `click(target, { gesture, count })` | `gesture: "click"` (default) calls the element's `click()`, twice plus `dblclick` for `count: 2`. `"tap"` sends pointer and touch events, then the mouse events and `click` unless the page cancelled `touchend`. `"mouse"` sends pointer and mouse events with `click`, and `dblclick` for `count: 2`. |
-| `longPress(target, { ms })` | `pointerdown`, a wait of `ms` (default 600, at most 5000), then `contextmenu` and `pointerup`. |
+| `click(target, { gesture, count, at })` | `gesture: "click"` (default) calls the element's `click()`, twice plus `dblclick` for `count: 2`. `"tap"` sends pointer and touch events, then the mouse events and `click` unless the page cancelled `touchend`. `"mouse"` sends pointer and mouse events with `click`, and `dblclick` for `count: 2`. |
+| `longPress(target, { ms, at })` | `pointerdown`, a wait of `ms` (default 600, at most 5000), then `contextmenu` and `pointerup`. |
 | `hover(target)` | Pointer and mouse over, enter and move. Unhovers the previous element first. |
 | `unhover()` | Pointer and mouse out and leave on the last hovered element. |
 | `focus(target)`, `blur(target)` | Focuses or blurs the element. |
@@ -258,9 +258,18 @@ Other `NOT_ACTIONABLE` reasons come from the operation itself: `not-a-text-field
 
 ## Fidelity
 
+Taps, mouse clicks and long presses land on the centre of the target. `at` moves the point inside the target's box, as fractions of its width and height from its left and top edges: `{ x: 0.3 }` is 30 percent across and halfway down, and each fraction defaults to 0.5. A slider or progress bar that acts on the touch point needs it:
+
+```ts
+// Seek to 30 percent of the track.
+await player.click(css("[data-testid=progress-bar]"), { gesture: "tap", at: { x: 0.3 } });
+```
+
+`click` takes `at` with `gesture: "tap"`, `gesture: "mouse"` or `input: "trusted"`; the default `gesture: "click"` calls the element's `click()`, which has no point, and fails with `INVALID_ARGUMENT` when given one. `longPress` always takes it. `x` and `y` must be numbers from 0 to 1, and any other field fails with `INVALID_ARGUMENT`. The actionability check still looks at the target's centre, so a point under another element is not refused; a trusted tap there reaches that element, as a finger would. A fraction of 1 lands on the far edge, just outside the box, so use a value a little below it.
+
 Input is synthetic by default: the agent dispatches DOM events from the page. Synthetic events have `isTrusted` false, CSS `:hover` does not apply, and they give the page no user activation, so a website that checks any of these ignores them.
 
-`input: "trusted"` asks the shell to send real Android input to the hidden context. It works for `click` (one touch tap, with no other `gesture` or `count`), `hover`, `unhover`, `type` and `press`.
+`input: "trusted"` asks the shell to send real Android input to the hidden context. It works for `click` (one touch tap, with no other `gesture` or `count`, at the centre or at `at`), `hover`, `unhover`, `type` and `press`.
 
 ```ts
 if (genesis.limits.trustedInput) {

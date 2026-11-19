@@ -25,6 +25,7 @@ import {
   type ReadSpec,
   type ScrollPosition,
   type ScrollTo,
+  type TargetPoint,
   type UrlGuard,
   type ViewId,
 } from "@let/core";
@@ -129,8 +130,9 @@ export interface ContextHandle {
   wait(condition: { target: Locator; state: ElementState } | { url: UrlGuard } | { read: ReadSpec }, timeoutMs: number): Promise<void>;
   scroll(to: ScrollTo, options?: { target?: Locator } & CallOptions): Promise<ScrollPosition>;
 
-  click(target: Locator, options?: InputCallOptions & { gesture?: "click" | "tap" | "mouse"; count?: 1 | 2 }): Promise<ActionResult>;
-  longPress(target: Locator, options?: InputCallOptions & { ms?: number }): Promise<ActionResult>;
+  /** `at` taps or clicks a point inside the target instead of its centre; see `TargetPoint`. */
+  click(target: Locator, options?: InputCallOptions & { gesture?: "click" | "tap" | "mouse"; count?: 1 | 2; at?: TargetPoint }): Promise<ActionResult>;
+  longPress(target: Locator, options?: InputCallOptions & { ms?: number; at?: TargetPoint }): Promise<ActionResult>;
   hover(target: Locator, options?: InputCallOptions): Promise<ActionResult>;
   unhover(options?: InputCallOptions): Promise<ActionResult>;
   focus(target: Locator, options?: InputCallOptions): Promise<ActionResult>;
@@ -836,12 +838,12 @@ export function createContext(id: string, startUrl: string, session: Session): C
     },
 
     click: (target, options = {}) => {
-      const { gesture, count, ...rest } = options;
-      return run("click", target, defined({ gesture, count }), rest);
+      const { gesture, count, at, ...rest } = options;
+      return run("click", target, defined({ gesture, count, at }), rest);
     },
     longPress: (target, options = {}) => {
-      const { ms, ...rest } = options;
-      return run("longPress", target, defined({ ms }), rest);
+      const { ms, at, ...rest } = options;
+      return run("longPress", target, defined({ ms, at }), rest);
     },
     hover: (target, options) => run("hover", target, {}, options),
     unhover: options => run("unhover", undefined, {}, options),

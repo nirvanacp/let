@@ -1,4 +1,4 @@
-import type { Locator, Step, ScrollPosition, ScrollTo } from "@let/core";
+import type { Locator, Step, ScrollPosition, ScrollTo, TargetPoint } from "@let/core";
 import { fill, setValue, submitEffect } from "./engine/form.js";
 import { actionable, sleep, waitUntil } from "./actionable.js";
 import { PageError } from "./errors.js";
@@ -44,8 +44,8 @@ export async function prepare(step: Step, context: InputContext): Promise<Prepar
       return {
         element,
         run: async () => {
-          if (gesture === "tap") tap(element);
-          else if (gesture === "mouse") mouseClick(element, step.count ?? 1);
+          if (gesture === "tap") tap(element, step.at);
+          else if (gesture === "mouse") mouseClick(element, step.count ?? 1, step.at);
           else { (element as HTMLElement).click(); if (step.count === 2) { (element as HTMLElement).click(); fire(element, "dblclick", { detail: 2 }); } }
         },
       };
@@ -55,7 +55,7 @@ export async function prepare(step: Step, context: InputContext): Promise<Prepar
       return {
         element,
         run: async () => {
-          const at = center(element);
+          const at = pointIn(element, step.at);
           pointer(element, "pointerdown", at, 1);
           await sleep(step.ms ?? 600);
           if (!element.isConnected) return;
@@ -213,9 +213,10 @@ function attach(element: Element, files: File[], via: "input" | "drop" | "paste"
 
 interface Point { x: number; y: number }
 
-function center(element: Element): Point {
+/** A point of the element's box in client coordinates, by fractions of its width and height; the centre by default. */
+export function pointIn(element: Element, at: TargetPoint = {}): Point {
   const rect = element.getBoundingClientRect();
-  return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  return { x: rect.left + rect.width * (at.x ?? 0.5), y: rect.top + rect.height * (at.y ?? 0.5) };
 }
 
 /** `enter` and `leave` events do not bubble; the others do. */
@@ -253,8 +254,8 @@ function touch(element: Element, type: "touchstart" | "touchend", at: Point): bo
 }
 
 /** The sequence a touch tap produces. A cancelled `touchend` skips the mouse events and `click`, as a browser does. */
-function tap(element: Element) {
-  const at = center(element);
+function tap(element: Element, point?: TargetPoint) {
+  const at = pointIn(element, point);
   pointer(element, "pointerover", at, 0, "touch");
   pointer(element, "pointerenter", at, 0, "touch");
   pointer(element, "pointerdown", at, 1, "touch");
@@ -273,8 +274,8 @@ function tap(element: Element) {
 }
 
 /** The mouse sequence; `count: 2` adds a second click and `dblclick`. */
-function mouseClick(element: Element, count: number) {
-  const at = center(element);
+function mouseClick(element: Element, count: number, point?: TargetPoint) {
+  const at = pointIn(element, point);
   pointer(element, "pointerover", at, 0);
   pointer(element, "pointerenter", at, 0);
   mouse(element, "mouseover", at, 0, 0);
@@ -298,7 +299,7 @@ function focusable(element: Element): HTMLElement | null {
 
 function hover(element: Element) {
   if (hovered && hovered !== element) unhover();
-  const at = center(element);
+  const at = pointIn(element);
   pointer(element, "pointerover", at, 0);
   pointer(element, "pointerenter", at, 0);
   mouse(element, "mouseover", at, 0, 0);
@@ -312,7 +313,7 @@ function unhover() {
   const element = hovered;
   hovered = null;
   if (!element?.isConnected) return;
-  const at = center(element);
+  const at = pointIn(element);
   pointer(element, "pointerout", at, 0);
   pointer(element, "pointerleave", at, 0);
   mouse(element, "mouseout", at, 0, 0);
