@@ -1,5 +1,5 @@
 /**
- * `@let/sdk/page`: what an applet's page module imports. The module runs in the website page
+ * `@nirvanacp/sdk/page`: what an applet's page module imports. The module runs in the website page
  * next to the page agent; the generated page script calls `startAgent` with it. Importing this
  * entry does not touch the DOM.
  */
@@ -19,4 +19,4 @@ export type {
   ValueReader,
 } from "./module.js";
 export { startAgent } from "./agent.js";
-export type { Evidence, Locator, Step, ReadSpec, UrlGuard } from "@let/core";
+export type { Evidence, Locator, Step, ReadSpec, UrlGuard } from "@nirvanacp/core";

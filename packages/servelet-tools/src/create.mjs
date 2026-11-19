@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { ENGINE_CHOICES, RUNTIME_CHOICES, SERVELET_CHOICES, requireImplemented } from '@let/core';
+import { ENGINE_CHOICES, RUNTIME_CHOICES, SERVELET_CHOICES, requireImplemented } from '@nirvanacp/core';
 import { TEMPLATES, toolError } from './locate.mjs';
 
 const ID = /^[a-z0-9-]+$/;

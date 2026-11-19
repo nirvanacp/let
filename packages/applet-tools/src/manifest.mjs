@@ -2,8 +2,8 @@ import { readFile, realpath, stat } from 'node:fs/promises';
 import { existsSync, statSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import path from 'node:path';
-import { parseSourceManifest, validateServiceConfig } from '@let/core';
-import { locateServelet } from '@let/servelet-tools';
+import { parseSourceManifest, validateServiceConfig } from '@nirvanacp/core';
+import { locateServelet } from '@nirvanacp/servelet-tools';
 
 export function toolError(code, message) { return Object.assign(new Error(message), { code }); }
 export function requireValue(condition, message) { if (!condition) throw toolError('INVALID_PACKAGE', message); }
@@ -45,7 +45,7 @@ async function readService(base, declaration, options) {
 }
 
 /**
- * Reads and validates `applet.json` with the schema rules in `@let/core`, splitting it into
+ * Reads and validates `applet.json` with the schema rules in `@nirvanacp/core`, splitting it into
  * the manifest the bundle carries and the `build` section only the tools use. Also reads every
  * declared service config into `services`. `service` is the one `serviceFile` names, or the first
  * remote service when none is given, for the `service` command. `servelets` overrides the

@@ -1,5 +1,5 @@
 {
-  "name": "@let/servelet-tools",
+  "name": "@nirvanacp/servelet-tools",
   "version": "0.0.0",
   "type": "module",
   "engines": {
@@ -19,6 +19,6 @@
     "typecheck": "node check-syntax.mjs"
   },
   "dependencies": {
-    "@let/core": "0.0.0"
+    "@nirvanacp/core": "0.0.0"
   }
 }

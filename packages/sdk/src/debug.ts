@@ -1,4 +1,4 @@
-import type { LogEntry } from "@let/core";
+import type { LogEntry } from "@nirvanacp/core";
 
 /** Entries wait this long for more before they go to the host together. */
 const SEND_MS = 1000;

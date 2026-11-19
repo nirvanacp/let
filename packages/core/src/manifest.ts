@@ -86,7 +86,7 @@ function isObject(value: unknown): value is Json {
 }
 
 /** Fields of the layout before the open SDK, which `parseSourceManifest` reports together. */
-const OLD_LAYOUT = "routes, foreground.screens and adapter are no longer manifest fields: routes and screens moved to code (the router helper of @let/sdk/router), and the page script moved to build.page";
+const OLD_LAYOUT = "routes, foreground.screens and adapter are no longer manifest fields: routes and screens moved to code (the router helper of @nirvanacp/sdk/router), and the page script moved to build.page";
 
 /**
  * Validates a source `applet.json` and splits it into the bundled manifest and its `build`

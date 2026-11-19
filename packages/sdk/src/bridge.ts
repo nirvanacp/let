@@ -1,6 +1,6 @@
-import { COMPAT, type Bound, type CallDetails, type ErrorCode, type Hello, type Method } from "@let/core";
+import { COMPAT, type Bound, type CallDetails, type ErrorCode, type Hello, type Method } from "@nirvanacp/core";
 
-export type { Bound, Limits } from "@let/core";
+export type { Bound, Limits } from "@nirvanacp/core";
 
 /** The object `addWebMessageListener` installs as `window.__genesisBridge`. */
 export interface BridgeObject {

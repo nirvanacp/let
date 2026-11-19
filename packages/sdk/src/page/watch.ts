@@ -10,7 +10,7 @@ import {
   type WatchPatch,
   type WatchSnapshot,
   type WatchStatus,
-} from "@let/core";
+} from "@nirvanacp/core";
 import { GenesisError } from "../bridge.js";
 import { debounce } from "./engine/debounce.js";
 import { diffRegion, json, keepNear, mergeVirtualized, type PageRecord, type Region } from "./engine/diff.js";

@@ -1,5 +1,5 @@
 {
-  "name": "@let/sdk",
+  "name": "@nirvanacp/sdk",
   "version": "0.0.0",
   "type": "module",
   "exports": {
@@ -42,6 +42,6 @@
     "dist"
   ],
   "dependencies": {
-    "@let/core": "0.0.0"
+    "@nirvanacp/core": "0.0.0"
   }
 }

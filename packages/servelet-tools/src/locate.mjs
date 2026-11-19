@@ -1,7 +1,7 @@
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateServelet } from '@let/core';
+import { validateServelet } from '@nirvanacp/core';
 
 /** An error with a code; the CLI prints `CODE: message` and exits with 1. */
 export function toolError(code, message) { return Object.assign(new Error(message), { code }); }

@@ -18,7 +18,7 @@ src/theme.css             tokens and base styles
 backend/                  optional service
 ```
 
-The page module imports only `@let/sdk/page` and pure helpers; `check` and `build` reject a page module that imports `@let/sdk/react`. Screens import `@let/sdk/react`. Share types, not code with side effects, between them; the page module is bundled separately and runs inside the website's page. Extract a helper only after a second real use.
+The page module imports only `@nirvanacp/sdk/page` and pure helpers; `check` and `build` reject a page module that imports `@nirvanacp/sdk/react`. Screens import `@nirvanacp/sdk/react`. Share types, not code with side effects, between them; the page module is bundled separately and runs inside the website's page. Extract a helper only after a second real use.
 
 ## Page modules
 
@@ -86,7 +86,7 @@ Wrap storage and service calls in one module, `src/library.ts`, that screens cal
 A covered website rests unless the applet is using it: Genesis pauses its drawing and timers, and every call, input and navigation wakes it first (see [how a covered page runs](page-control.md#how-a-covered-page-runs)). The applet's part is to leave it resting:
 
 - Never keep a page busy to "keep it warm". Do not poll with `read`, and do not run a timer that calls the page; records arrive through watches when the page changes.
-- Bound every list in the reader's selector and with `limit`; a page is at most 192 KiB of JSON. Render a list over 50 rows with `VirtualList` from `@let/sdk/react`, or in pages, not all at once.
+- Bound every list in the reader's selector and with `limit`; a page is at most 192 KiB of JSON. Render a list over 50 rows with `VirtualList` from `@nirvanacp/sdk/react`, or in pages, not all at once.
 - Memoize rows by key, and select a single record with `useRecord` so that one change re-renders one row.
 - Keep images lazy and sized: `width`, `height`, `loading="lazy"` and `decoding="async"` on every `<img>`.
 - Hold a page (`useHold`) only for work it does alone, such as playing music, and release the hold when that work ends.

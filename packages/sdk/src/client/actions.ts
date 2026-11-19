@@ -1,4 +1,4 @@
-import { USER_ACTION_DEADLINE_MS, type DownloadSave, type FileHandle, type FilesPick, type FilesPicked, type ShareInput } from "@let/core";
+import { USER_ACTION_DEADLINE_MS, type DownloadSave, type FileHandle, type FilesPick, type FilesPicked, type ShareInput } from "@nirvanacp/core";
 import type { Session } from "./session.js";
 
 /** The page where the applet UI shows a picked file, for an `<img>` or `<video>` source. */

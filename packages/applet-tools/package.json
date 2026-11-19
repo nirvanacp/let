@@ -1,5 +1,5 @@
 {
-  "name": "@let/applet-tools",
+  "name": "@nirvanacp/applet-tools",
   "version": "0.0.0",
   "type": "module",
   "engines": {
@@ -22,8 +22,8 @@
     "prepack": "node prepare-kit.mjs"
   },
   "dependencies": {
-    "@let/core": "0.0.0",
-    "@let/servelet-tools": "0.0.0",
+    "@nirvanacp/core": "0.0.0",
+    "@nirvanacp/servelet-tools": "0.0.0",
     "esbuild": "0.28.2",
     "typescript": "7.0.2"
   }

@@ -1,4 +1,4 @@
-import type { ContextNavigated, ErrorBody, PageEmitEvent, ViewId, WatchPatch, WatchSnapshot, WatchStatus } from "@let/core";
+import type { ContextNavigated, ErrorBody, PageEmitEvent, ViewId, WatchPatch, WatchSnapshot, WatchStatus } from "@nirvanacp/core";
 
 /**
  * The value of one watch. `get()` returns the same object until something in it changes, and a
