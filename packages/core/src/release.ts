@@ -22,10 +22,16 @@ export interface ReleaseCapabilities {
 }
 
 export interface ReleaseToolchain {
-  /** The Genesis commit that built the bundle; CI rebuilds at this commit. */
-  genesisCommit: string;
+  /**
+   * The Genesis commit that built the bundle. Records made before the tools were published to npm
+   * carry it; new records identify the build by `tools`, `sdk` and `node` instead.
+   */
+  genesisCommit?: string;
+  /** `process.versions.node` of the build. */
   node: string;
+  /** The `@nirvanacp/applet-tools` version that built the bundle. */
   tools: string;
+  /** The `@nirvanacp/sdk` version the bundle was built against. */
   sdk: string;
 }
 
@@ -154,8 +160,8 @@ export function validateReleaseRecord(value: unknown): ReleaseRecord {
 
   const toolchain = value.toolchain;
   if (isObject(toolchain)) {
-    keys(toolchain, "/toolchain", ["genesisCommit", "node", "tools", "sdk"]);
-    text(toolchain, "/toolchain", "genesisCommit", HEX40);
+    keys(toolchain, "/toolchain", ["node", "tools", "sdk"], ["genesisCommit"]);
+    if (toolchain.genesisCommit !== undefined) text(toolchain, "/toolchain", "genesisCommit", HEX40);
     for (const key of ["node", "tools", "sdk"]) text(toolchain, "/toolchain", key);
   } else fail("/toolchain", "must be an object");
 
