@@ -1,16 +1,34 @@
 # Getting started
 
-You need Node 24, the `@nirvanacp/sdk` and `@nirvanacp/applet-tools` packages, and for device installs a debug build of the Genesis app on a device or emulator reachable over adb.
+You need:
+
+- Node 24.15.0, the version the packages' `engines` names;
+- `adb` from the Android SDK platform tools;
+- an Android emulator or device, with the Genesis developer build installed as described below.
+
+You do not need the Genesis repository, Rust or the Android build tools. The tools and the SDK come from npm, and you can create the applet in any directory.
+
+## Install the Genesis developer build
+
+Download `genesis-<version>-developer.apk` from the [Genesis releases page](https://github.com/nirvanacp/genesis/releases) and install it on your emulator or device:
+
+```sh
+adb -s <serial> install genesis-<version>-developer.apk
+```
+
+`adb devices` lists the serials. The release build of Genesis, `genesis-<version>.apk`, refuses development installs, so you need this build to install an applet you are working on. It is a separate app, Genesis Dev (`app.nirvana.genesis.dev`), so it installs beside the release build, with its own applets and sign-ins.
 
 ## Create
 
 Start from a template:
 
 ```sh
-npx genesis-applet create my-applet --origin https://example.com --name "Example"
+npx @nirvanacp/applet-tools create my-applet --origin https://example.com --name "Example"
 cd my-applet
 npm install
 ```
+
+`npm install` installs the SDK, the tools and the template's other dependencies at the exact versions `create` wrote into `package.json`. From then on, run the tools as `npx let-applet` inside the applet.
 
 `--template react` is the default. `--template vanilla` writes the same applet in TypeScript without a framework, through `connect` from `@nirvanacp/sdk` and `createRouter` from `@nirvanacp/sdk/router`. To use another framework, or a project you already have, add an `applet.json` whose `build` section names your build command and its output directory, as [frameworks](frameworks.md) describes.
 
@@ -122,18 +140,33 @@ Add the smallest set of dependencies and capabilities the requested features nee
 ```sh
 npm run check                                      # compatibility, manifest, TypeScript and the page module
 npm run build                                      # writes dist/ with the bundle
-npx genesis-applet dev install . --device emulator-5554
-npx genesis-applet dev status my-applet --device emulator-5554
+npx let-applet dev install . --device emulator-5554 --application app.nirvana.genesis.dev
+npx let-applet dev status my-applet --device emulator-5554 --application app.nirvana.genesis.dev
 ```
+
+`npm run check` and `npm run build` run `genesis-applet check .` and `genesis-applet build .`; `genesis-applet` is another name for `let-applet`. `--application` names the Genesis app to install into; without it, the device commands use `app.nirvana.genesis`, which is the release build, or a debug build made from Genesis source. Set `GENESIS_APPLICATION_ID=app.nirvana.genesis.dev` in your shell to leave it out.
 
 `check` compares the applet with the tools and fails with `APPLET_INCOMPATIBLE` on a difference. It then validates the manifest against schema 6, type-checks the project (the `build.check` command, or `tsc` when there is a `tsconfig.json`), and bundles and imports the page module that `build.page` names. Importing runs the applet's code, so check only applets you trust. The page module must not import `@nirvanacp/sdk/react`. `check` and `build` warn, without failing, when the page script is over 100 KiB gzip or the UI's JavaScript is over 350 KiB gzip.
 
-`build` bundles the UI and the page module into `dist/`. `--debug` sets the constant `__GENESIS_DEBUG__` to `true` instead of `false` in the code esbuild bundles (the page script, and the UI when `build.foreground` names an `entry`), so code guarded by `if (__GENESIS_DEBUG__)` stays in the build. A project's own UI build command does not see it. `dev install` takes the applet directory (it uses `dist/`) or a build output directory. It does not build, so run `build` first. It copies the bundle to the debug app, which applies it without restarting Genesis, and reports the accepted revision or the rejection reason, including an incompatible SDK. `dev status` lists the installed applets with their status and, given an id, its last install receipt. Every command accepts `--json`; device commands accept `--adb <path>` and `--application <id>`.
+`build` bundles the UI and the page module into `dist/`. `--debug` sets the constant `__GENESIS_DEBUG__` to `true` instead of `false` in the code esbuild bundles (the page script, and the UI when `build.foreground` names an `entry`), so code guarded by `if (__GENESIS_DEBUG__)` stays in the build. A project's own UI build command does not see it. `dev install` takes the applet directory (it uses `dist/`) or a build output directory. It does not build, so run `build` first. It copies the bundle to the developer build, which applies it without restarting Genesis, and reports the accepted revision or the rejection reason, including an incompatible SDK. `dev status` lists the installed applets with their status and, given an id, its last install receipt. Every command accepts `--json`; device commands accept `--adb <path>` and `--application <id>`.
 
-To sign in once on your laptop instead of on the phone, start Chrome with a separate profile and a DevTools port (`chrome --user-data-dir=<directory> --remote-debugging-port=9222`), sign in to the applet's websites there, and run `npx genesis-applet dev cookies . --device <serial>`. It copies only the cookies of the manifest's origins into a debug Genesis and reports counts per domain. Websites can treat imported cookies as a new sign-in and email the account about it, and Google sign-ins do not transfer. Partitioned cookies are not imported. Reload websites that were already open from the Genesis menu.
+To sign in once on your laptop instead of on the phone, start Chrome with a separate profile and a DevTools port (`chrome --user-data-dir=<directory> --remote-debugging-port=9222`), sign in to the applet's websites there, and run `npx let-applet dev cookies . --device <serial> --application app.nirvana.genesis.dev`. It copies only the cookies of the manifest's origins into the developer build and reports counts per domain. Websites can treat imported cookies as a new sign-in and email the account about it, and Google sign-ins do not transfer. Partitioned cookies are not imported. Reload websites that were already open from the Genesis menu.
 
-Release builds of Genesis refuse development installs. They install the applets bundled into the APK and published releases that people add from GitHub; see [publishing](publishing.md) for versions, tags and the CI workflows.
+The release build of Genesis refuses development installs. It installs the applets bundled into the APK and published releases that people add from GitHub; see [publishing](publishing.md) for versions, tags and the CI workflows.
 
 ## Hand off the kit
 
-`npx genesis-applet kit export --out <new-directory>` writes `AGENTS.md`, `README.md`, `guides/`, `skills/`, `templates/` and `kit.json` with the matching versions. Give a coding agent the path to `AGENTS.md`.
+`create` already put this kit in the applet's `let/` directory. `npx let-applet kit export --out <new-directory>` writes another copy: `AGENTS.md`, `README.md`, `factory/` and `kit.json` with the matching versions. Give a coding agent the path to `AGENTS.md`.
+
+## Working inside a Genesis checkout
+
+This section is for Genesis platform developers, who change the framework and the applets in one checkout. Applet builders skip it.
+
+```sh
+npm run workspace -- setup              # clone Let and the applets, npm ci in the applets
+npm ci                                  # the Let packages at the Genesis root
+npm run workspace -- link-framework     # install packed copies of let/packages/* into the applets
+npm run workspace -- unlink-framework   # npm ci in the applets, back to the npm versions
+```
+
+The applets directory is its own npm workspace and installs the Let packages from npm. `link-framework` replaces them with copies of the checkout's `let/packages/*` without changing `package.json` or the lockfile; run it again after each framework change. `publish` refuses linked tools, so run `unlink-framework` before publishing.

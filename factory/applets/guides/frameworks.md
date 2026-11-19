@@ -219,7 +219,7 @@ Build and install it:
 ```sh
 npm install
 npx genesis-applet build .
-npx genesis-applet dev install . --device <serial>
+npx genesis-applet dev install . --device <serial> --application app.nirvana.genesis.dev
 ```
 
 To type check the Vue files, add `vue-tsc` to `devDependencies`, write the components in TypeScript and set `"check": "npx vue-tsc --noEmit"` in `build`. The watch, inputs and results that `App.vue` uses are described in [page control](page-control.md), and the full API is in the [SDK reference](sdk-reference.md).

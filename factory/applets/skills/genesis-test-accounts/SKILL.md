@@ -88,13 +88,13 @@ The host is the site whose sign-in form takes the value, which can differ from t
 
 ## Steps
 
-Run the scripts with Node from the applet directory. The paths below assume the kit sits at `factory/` next to the applet, as `genesis-applet create` lays it out. In a collection of applets, adjust the path to wherever `factory/` is.
+Run the scripts with Node from the applet directory. The paths below assume the kit sits at `let/` in the applet, as `let-applet create` lays it out. In a collection of applets, adjust the path to wherever the kit is.
 
 1. **Check the session first.** Open the applet from the Genesis launcher. If the screen that needs the account already shows a signed-in account, skip the rest.
 2. **List the keys.**
 
    ```sh
-   node factory/skills/genesis-test-accounts/scripts/list-accounts.mjs
+   node let/factory/applets/skills/genesis-test-accounts/scripts/list-accounts.mjs
    ```
 
    The output names each account, how to sign in to it, and its keys, with `set` or `empty` instead of the value:
@@ -129,7 +129,7 @@ Run the scripts with Node from the applet directory. The paths below assume the 
 5. **Type the username.**
 
    ```sh
-   node factory/skills/genesis-test-accounts/scripts/enter-secret.mjs NEWS_YCOMBINATOR_COM_USERNAME --device emulator-5554
+   node let/factory/applets/skills/genesis-test-accounts/scripts/enter-secret.mjs NEWS_YCOMBINATOR_COM_USERNAME --device emulator-5554
    ```
 
    It prints `Typed NEWS_YCOMBINATOR_COM_USERNAME into the focused field.` and nothing else of the value.
@@ -158,7 +158,7 @@ When a site or provider asks for a code from an authenticator app (Google Authen
 2. Tap the code field, then type the code:
 
    ```sh
-   node factory/skills/genesis-test-accounts/scripts/enter-secret.mjs ACCOUNTS_GOOGLE_COM_TOTP_SECRET_0 --device emulator-5554
+   node let/factory/applets/skills/genesis-test-accounts/scripts/enter-secret.mjs ACCOUNTS_GOOGLE_COM_TOTP_SECRET_0 --device emulator-5554
    ```
 
    It prints `Typed the current code from ACCOUNTS_GOOGLE_COM_TOTP_SECRET_0 into the focused field.` When fewer than 5 seconds of the current 30-second code remain, it waits for the next code first.
@@ -183,7 +183,7 @@ Rule 6 applies to each sign-in. When the second sign-in hits a challenge, the mu
 `enter-secret.mjs` types with `adb shell input text` by default. If your environment gives you its own command for typing on the device, use that so the user can follow along. Put the command after `--` and write `{secret}` where the text goes. The script replaces `{secret}` with the value, runs the command without a shell, and replaces the value with `[redacted]` in anything the command prints:
 
 ```sh
-node factory/skills/genesis-test-accounts/scripts/enter-secret.mjs X_COM_PASSWORD -- <device-command> <type-subcommand> '{secret}'
+node let/factory/applets/skills/genesis-test-accounts/scripts/enter-secret.mjs X_COM_PASSWORD -- <device-command> <type-subcommand> '{secret}'
 ```
 
 Write the command the way you would type ordinary text with that tool, with `{secret}` in place of the text. Keep the quotes around `{secret}` so your shell passes it through unchanged.
