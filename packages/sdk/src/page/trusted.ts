@@ -18,7 +18,7 @@ export const TRUSTED_OPS = new Set(["click", "hover", "unhover", "type", "press"
 
 /** Like `prepare`, for a step with `input: "trusted"`. Throws when the target is missing, not actionable or protected. */
 export async function prepareTrusted(step: Step, context: InputContext, send: SendInput): Promise<Prepared> {
-  const target = async (locator: Locator, options: { timeoutMs?: number; force?: boolean }) =>
+  const target = async (locator: Locator, options: { timeoutMs?: number; force?: boolean; at?: TargetPoint }) =>
     actionable(locator, context.records, options, context.stop);
   switch (step.op) {
     case "click": {

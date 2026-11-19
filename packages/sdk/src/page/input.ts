@@ -35,7 +35,7 @@ let hovered: Element | null = null;
 
 /** Finds what a step needs, waiting up to its `timeoutMs`, and returns its effect. Throws when the target is missing, not actionable or protected. */
 export async function prepare(step: Step, context: InputContext): Promise<Prepared> {
-  const target = async (locator: Locator, options: { timeoutMs?: number; force?: boolean } = {}) =>
+  const target = async (locator: Locator, options: { timeoutMs?: number; force?: boolean; at?: TargetPoint } = {}) =>
     actionable(locator, context.records, options, context.stop);
   switch (step.op) {
     case "click": {
