@@ -14,8 +14,8 @@
     ".": "./src/index.mjs"
   },
   "bin": {
-    "let-applet": "./src/cli.mjs",
-    "genesis-applet": "./src/cli.mjs"
+    "let-applet": "src/cli.mjs",
+    "genesis-applet": "src/cli.mjs"
   },
   "scripts": {
     "typecheck": "node check-syntax.mjs",

@@ -15,7 +15,7 @@
     ".": "./src/index.mjs"
   },
   "bin": {
-    "let-servelet": "./src/cli.mjs"
+    "let-servelet": "src/cli.mjs"
   },
   "scripts": {
     "typecheck": "node check-syntax.mjs",
