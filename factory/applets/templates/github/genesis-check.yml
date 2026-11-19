@@ -1,6 +1,7 @@
 # Copy to .github/workflows/genesis-check.yml in your applet repository.
-# Replace both <genesis-sha> values with the same full Genesis commit sha, one that is on GitHub.
-# The check rebuilds every applet with the Genesis commit its release record names and fails
+# Replace <let-sha> with a full commit sha of the Let repository (nirvanacp/let) that is on GitHub.
+# The check installs the repository's tools with npm ci from its committed package-lock.json,
+# rebuilds every applet with the tools and Node versions its release record names, and fails
 # unless the rebuild equals the committed published/ build.
 name: Genesis check
 
@@ -14,6 +15,10 @@ permissions:
 
 jobs:
   check:
-    uses: nirvanacp/genesis/.github/workflows/applet-check.yml@<genesis-sha>
-    with:
-      genesis-ref: <genesis-sha>
+    uses: nirvanacp/let/.github/workflows/applet-check.yml@<let-sha>
+    # Only when an applet has a local service: the repository and full commit sha that hold its
+    # servelets, and the exact Go version that built them (go version).
+    # with:
+    #   servelets-repository: <owner/name>
+    #   servelets-ref: <servelets-sha>
+    #   go-version: <go-version>
