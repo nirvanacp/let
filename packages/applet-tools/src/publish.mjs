@@ -1,11 +1,11 @@
 import { mkdir, mkdtemp, readdir, readFile, realpath, rename, rm, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
 import { RELEASE_FORMAT, validateReleaseRecord } from '@nirvanacp/core';
 import { buildApplet } from './build.mjs';
-import { TOOLS_VERSION } from './compat.mjs';
+import { installedSdk, TOOLS_VERSION } from './compat.mjs';
 import { readApplet, requireValue, sha256, toolError } from './manifest.mjs';
 import { findRepository, git, githubFullName } from './repo.mjs';
 import { isExact, parse } from './semver.mjs';
@@ -14,35 +14,35 @@ export const PUBLISHED = 'published';
 export const bundleName = id => `applet-${id}.bundle.json`;
 export const recordName = id => `applet-${id}.release.json`;
 
+const SDK = '@nirvanacp/sdk';
+const LOCKFILE = 'package-lock.json';
+const INSTALL = 'Run npm ci in the applet repository and use npx let-applet';
+const insideNodeModules = file => file.split(path.sep).includes('node_modules');
+
 /**
- * The Genesis checkout these tools run from, or null when they were installed from a package.
- * The tools live at `let/packages/applet-tools/src` inside it.
+ * The versions of the tools and the SDK that build the release. A release is reproducible only
+ * from tools and an SDK installed with npm from the applet repository's committed lockfile, so this
+ * refuses a workspace checkout or a linked package (whose real path is outside `node_modules`)
+ * and, with `requireLockfile`, a missing, untracked or changed `package-lock.json` at the root of
+ * the applet repository.
  */
-export function genesisRoot() {
-  const root = fileURLToPath(new URL('../../../../', import.meta.url));
-  try {
-    const json = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8'));
-    return Array.isArray(json.workspaces) && existsSync(path.join(root, 'let/packages/applet-tools')) ? path.resolve(root) : null;
-  } catch { return null; }
-}
-
-const GENESIS_PATHS = ['tools', 'package.json', 'package-lock.json'];
-// The framework is its own repository inside the Genesis checkout; its build inputs must be committed too.
-const LET_PATHS = ['packages', 'go', 'package.json'];
-
-/** The Genesis commit that builds the release. Refuses when the build inputs differ from it. */
-function genesisCommit({ requireClean }) {
-  const root = genesisRoot();
-  requireValue(root, 'publish needs the Genesis checkout these tools belong to; run it from a Genesis workspace');
-  if (requireClean) {
-    const dirty = git(root, ['status', '--porcelain', '--', ...GENESIS_PATHS]);
-    requireValue(!dirty, `The Genesis checkout has uncommitted changes, so its commit would not describe the build:\n${dirty}\nCommit them first.`);
-    const framework = git(path.join(root, 'let'), ['status', '--porcelain', '--', ...LET_PATHS]);
-    requireValue(!framework, `The Let checkout has uncommitted changes, so the build would not match a commit:\n${framework}\nCommit them first.`);
+export async function installedTools(base, { requireLockfile }) {
+  const tools = await realpath(fileURLToPath(new URL('..', import.meta.url)));
+  requireValue(insideNodeModules(tools), `These tools run from ${tools}, which is not an installed package, so the release would not name a published tools version. ${INSTALL}.`);
+  let sdkFile;
+  try { sdkFile = await realpath(createRequire(path.join(base, 'package.json')).resolve(SDK)); }
+  catch { requireValue(false, `${base} does not resolve ${SDK}. ${INSTALL}.`); }
+  requireValue(insideNodeModules(sdkFile), `${base} resolves ${SDK} from ${sdkFile}, which is not an installed package, so the release would not name a published SDK version. ${INSTALL}.`);
+  const sdk = await installedSdk(base);
+  requireValue(sdk, `Cannot read the version of the installed ${SDK}. ${INSTALL}.`);
+  if (requireLockfile) {
+    const { root } = await findRepository(base);
+    const tracked = git(root, ['ls-files', '--', LOCKFILE]);
+    requireValue(tracked === LOCKFILE, `${path.join(root, LOCKFILE)} is not committed. Run npm install in ${root} and commit ${LOCKFILE}, so the release can be rebuilt from it.`);
+    const dirty = git(root, ['status', '--porcelain', '--', LOCKFILE]);
+    requireValue(!dirty, `${path.join(root, LOCKFILE)} has uncommitted changes, so it would not describe the build. Commit it first.`);
   }
-  const commit = git(root, ['rev-parse', 'HEAD']);
-  const pushed = git(root, ['branch', '-r', '--contains', commit], { allowFailure: true });
-  return { root, commit, warnings: pushed ? [] : [`Genesis commit ${commit.slice(0, 12)} is on no remote branch; CI cannot check it out until it is pushed`] };
+  return { tools: TOOLS_VERSION, sdk };
 }
 
 async function readPackage(base) {
@@ -66,7 +66,7 @@ async function homeOf(base) {
 }
 
 /** The release record for a built bundle, in the field order of the documented format. */
-export function releaseRecord({ manifest, version, bundleBytes, compat, commit, home }) {
+export function releaseRecord({ manifest, version, bundleBytes, compat, home }) {
   return {
     releaseFormat: RELEASE_FORMAT,
     appletId: manifest.id,
@@ -76,7 +76,7 @@ export function releaseRecord({ manifest, version, bundleBytes, compat, commit, 
     compat,
     origins: manifest.origins,
     capabilities: { storage: !!manifest.capabilities.storage, services: (manifest.capabilities.services ?? []).map(s => s.id) },
-    toolchain: { genesisCommit: commit, node: process.versions.node, tools: TOOLS_VERSION, sdk: compat.sdk },
+    toolchain: { node: process.versions.node, tools: TOOLS_VERSION, sdk: compat.sdk },
     ...(home ? { home } : {}),
     builtAt: compat.builtAt,
   };
@@ -85,15 +85,15 @@ export function releaseRecord({ manifest, version, bundleBytes, compat, commit, 
 const recordText = record => JSON.stringify(record, null, 2) + '\n';
 
 /** Builds a release bundle into a temporary directory and returns its bytes and record. */
-async function buildRelease(base, { builtAt, commit, home }) {
+async function buildRelease(base, { builtAt, home, servelets }) {
   const { manifest } = await readApplet(base);
   const pkg = await readPackage(base);
   const temporary = await mkdtemp(path.join(os.tmpdir(), 'genesis-publish-'));
   try {
-    const built = await buildApplet(base, path.join(temporary, 'dist'), { builtAt });
+    const built = await buildApplet(base, path.join(temporary, 'dist'), { builtAt, servelets });
     requireValue(built.appletId === manifest.id, `The build produced applet ${built.appletId}, but applet.json names ${manifest.id}`);
     const bundleBytes = await readFile(built.importFile);
-    return { manifest, bundleBytes, record: releaseRecord({ manifest, version: pkg.version, bundleBytes, compat: built.compat, commit, home }) };
+    return { manifest, bundleBytes, record: releaseRecord({ manifest, version: pkg.version, bundleBytes, compat: built.compat, home }) };
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
@@ -120,20 +120,21 @@ async function writeAtomic(file, bytes) {
  * Writes `published/applet-<id>.bundle.json` and its release record from a fresh release build,
  * or with `verify` rebuilds with the committed `builtAt` and compares bytes without writing.
  */
-export async function publishApplet(directory, { verify = false } = {}) {
+export async function publishApplet(directory, { verify = false, servelets } = {}) {
   const base = await realpath(directory);
-  const { manifest } = await readApplet(base);
+  const { manifest } = await readApplet(base, { servelets });
   const pkg = await readPackage(base);
   checkPackage(pkg);
-  return verify ? verifyPublished(base, manifest) : writePublished(base, pkg);
+  return verify ? verifyPublished(base, manifest, { servelets }) : writePublished(base, pkg, { servelets });
 }
 
-async function writePublished(base, pkg) {
-  const { commit, warnings } = genesisCommit({ requireClean: true });
+async function writePublished(base, pkg, { servelets }) {
+  const toolchain = await installedTools(base, { requireLockfile: true });
+  const warnings = [];
   const home = await homeOf(base);
   if (!home) warnings.push('No GitHub origin remote found; the record has no home, so a bundled copy cannot match later releases');
   const builtAt = new Date(Math.floor(Date.now() / 1000) * 1000).toISOString().replace(/\.000Z$/, 'Z');
-  const { manifest, bundleBytes, record } = await buildRelease(base, { builtAt, commit, home });
+  const { manifest, bundleBytes, record } = await buildRelease(base, { builtAt, home, servelets });
   validateReleaseRecord(record);
 
   const output = path.join(base, PUBLISHED);
@@ -150,19 +151,19 @@ async function writePublished(base, pkg) {
   }
   return {
     appletId: manifest.id, version: pkg.version, sha256: record.bundle.sha256, size: record.bundle.size, builtAt,
-    genesisCommit: commit, home: record.home ?? null, bundle: bundleFile, record: recordFile, removed, warnings,
+    tools: toolchain.tools, sdk: toolchain.sdk, home: record.home ?? null, bundle: bundleFile, record: recordFile, removed, warnings,
     next: 'Commit published/, then run genesis-applet release',
   };
 }
 
-async function verifyPublished(base, manifest) {
+async function verifyPublished(base, manifest, { servelets }) {
   const published = await readPublished(base, manifest.id);
   requireValue(published, `${path.join(PUBLISHED, recordName(manifest.id))} does not exist; run genesis-applet publish first`);
   const { record } = published;
   requireValue(published.bundleBytes, `${path.join(PUBLISHED, record.bundle.file)} is missing`);
-  const { commit } = genesisCommit({ requireClean: false });
-  // The home comes from the applet repository's remote, which a CI copy of the applet does not have.
-  const rebuilt = await buildRelease(base, { builtAt: record.builtAt, commit, home: record.home });
+  const toolchain = await installedTools(base, { requireLockfile: false });
+  // The home comes from the applet repository's remote, which a CI checkout may name differently.
+  const rebuilt = await buildRelease(base, { builtAt: record.builtAt, home: record.home, servelets });
   // The Node version that ran publish is informational; the bundle bytes show any effect it had.
   rebuilt.record.toolchain.node = record.toolchain.node;
   const differences = [];
@@ -178,5 +179,5 @@ async function verifyPublished(base, manifest) {
       : 'release record formatting differs');
   }
   if (differences.length) throw toolError('PUBLISH_MISMATCH', `The committed release does not match a rebuild:\n${differences.map(d => `  ${d}`).join('\n')}`);
-  return { appletId: manifest.id, version: record.version, sha256: record.bundle.sha256, builtAt: record.builtAt, genesisCommit: commit, identical: true };
+  return { appletId: manifest.id, version: record.version, sha256: record.bundle.sha256, builtAt: record.builtAt, tools: toolchain.tools, sdk: toolchain.sdk, identical: true };
 }

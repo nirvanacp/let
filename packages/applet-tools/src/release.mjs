@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { readApplet, requireValue, toolError } from './manifest.mjs';
-import { genesisRoot, PUBLISHED, publishApplet, readPublished } from './publish.mjs';
+import { TOOLS_VERSION } from './compat.mjs';
+import { installedTools, PUBLISHED, publishApplet, readPublished } from './publish.mjs';
 import { findRepository, git, listApplets, tagFor, tagsFor } from './repo.mjs';
 import { compare } from './semver.mjs';
 
@@ -32,7 +33,7 @@ export async function listRepository(directory) {
  * (multi-applet repository) at HEAD, after checking that the committed release is current and
  * equals a rebuild of the committed source. Never pushes.
  */
-export async function releaseApplet(directory, { dryRun = false } = {}) {
+export async function releaseApplet(directory, { dryRun = false, servelets } = {}) {
   const { root, layout, applet, warnings } = await findRepository(directory);
   const { manifest } = await readApplet(applet.directory);
   const status = git(root, ['status', '--porcelain']);
@@ -52,13 +53,11 @@ export async function releaseApplet(directory, { dryRun = false } = {}) {
   const highest = existing[0];
   requireValue(!highest || compare(applet.version, highest.version) > 0, `Version ${applet.version} is not higher than the released ${highest?.version} (${highest?.tag})`);
 
-  // A rebuild catches source changes committed after publish. It must use the recorded Genesis commit.
-  const recorded = published.record.toolchain.genesisCommit;
-  const genesis = genesisRoot();
-  requireValue(genesis, 'release rebuilds the committed build, so it needs the Genesis checkout these tools belong to');
-  const head = git(genesis, ['rev-parse', 'HEAD']);
-  requireValue(head === recorded, `${relative} was built with Genesis ${recorded.slice(0, 12)}, but this Genesis is at ${head.slice(0, 12)}; run genesis-applet publish and commit published/, or check out Genesis ${recorded.slice(0, 12)}`);
-  try { await publishApplet(applet.directory, { verify: true }); }
+  // A rebuild catches source changes committed after publish. It must use the recorded tools version.
+  await installedTools(applet.directory, { requireLockfile: true });
+  const recorded = published.record.toolchain.tools;
+  requireValue(recorded === TOOLS_VERSION, `${relative} was built with tools ${recorded}, but these tools are ${TOOLS_VERSION}; run genesis-applet publish and commit published/, or install tools ${recorded} with npm ci`);
+  try { await publishApplet(applet.directory, { verify: true, servelets }); }
   catch (error) { throw toolError('PUBLISH_MISMATCH', `${error.message}\nRun genesis-applet publish and commit published/ before releasing.`); }
 
   const commit = git(root, ['rev-parse', 'HEAD']);

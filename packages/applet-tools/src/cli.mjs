@@ -42,9 +42,11 @@ const help = `let-applet (also installed as genesis-applet)
   service start|status|stop|provision <directory> --device <serial> [--service-file <path>]
   kit export --out <directory>
   applets [<repository>]                         applets, versions, published builds and tags
-  publish <directory> [--verify]                 write published/applet-<id>.bundle.json and
+  publish <directory> [--verify] [--servelets <directory>]
+                                                 write published/applet-<id>.bundle.json and
                                                  its .release.json; --verify rebuilds and compares
-  release <directory> [--dry-run]                tag the published version: v<version>, or
+  release <directory> [--dry-run] [--servelets <directory>]
+                                                 tag the published version: v<version>, or
                                                  <id>/v<version> in a multi-applet repository
 check and build first compare the applet with these tools' versions and fail with
 APPLET_INCOMPATIBLE on a difference. They then run the applet's code: the type check
@@ -60,7 +62,9 @@ let-servelet check on it and build adds servelets/<serviceId>/servelet.wasm and 
 to the bundle. Servelets are looked up in --servelets, then $LET_SERVELETS_DIR, then the
 servelets/ directory of the nearest ancestor. service start|status|stop has nothing to do for
 local services.
-publish needs a committed Genesis checkout, a semver package.json version and exact
+publish, release and their rebuilds run only from tools and an SDK installed with npm: run
+npm ci in the applet repository and use npx let-applet. publish and release also need a
+committed package-lock.json at the repository root, a semver package.json version and exact
 dependency versions. Raise versions with npm version <patch|minor|major> --no-git-tag-version.
 release needs a clean repository and never pushes; push the tag yourself.
 Every command accepts --json. Device commands accept --adb <path> (default: adb in
@@ -117,12 +121,12 @@ async function main(args) {
       return ['applets', await listRepository(positional[0] ?? '.')];
     }
     case 'publish': {
-      const { positional, options } = parse(args.slice(1), ['json', 'verify']);
-      return [options.verify ? 'publish --verify' : 'publish', await publishApplet(one(positional, 'applet directory'), { verify: !!options.verify })];
+      const { positional, options } = parse(args.slice(1), ['json', 'verify', 'servelets']);
+      return [options.verify ? 'publish --verify' : 'publish', await publishApplet(one(positional, 'applet directory'), { verify: !!options.verify, servelets: options.servelets })];
     }
     case 'release': {
-      const { positional, options } = parse(args.slice(1), ['json', 'dry-run']);
-      return [options['dry-run'] ? 'release --dry-run' : 'release', await releaseApplet(one(positional, 'applet directory'), { dryRun: !!options['dry-run'] })];
+      const { positional, options } = parse(args.slice(1), ['json', 'dry-run', 'servelets']);
+      return [options['dry-run'] ? 'release --dry-run' : 'release', await releaseApplet(one(positional, 'applet directory'), { dryRun: !!options['dry-run'], servelets: options.servelets })];
     }
     default:
       throw new UsageError(command ? `Unknown command ${command}` : help);
