@@ -114,8 +114,13 @@ export interface ContextHandle {
   /** Runs after each committed navigation, once `state` reflects it. */
   onNavigated(listener: (navigation: ContextNavigated) => void): () => void;
 
-  /** Navigations reject with a `GenesisError` when Genesis refuses them, such as a URL outside the declared origins. */
-  navigate(url: string, options?: { mode?: NavigateMode }): Promise<void>;
+  /**
+   * Navigations reject with a `GenesisError` when Genesis refuses them, such as a URL outside the
+   * declared origins. `sameDocument: true`, for a URL on the page's own origin, first asks the
+   * website's router to show the URL inside the current document, as a single-page website does
+   * for Back, and loads the URL when the website does not; playing audio and page state then stay.
+   */
+  navigate(url: string, options?: { mode?: NavigateMode; sameDocument?: boolean }): Promise<void>;
   back(steps?: number): Promise<void>;
   forward(): Promise<void>;
   reload(): Promise<void>;
@@ -817,7 +822,11 @@ export function createContext(id: string, startUrl: string, session: Session): C
     navigate(url, options = {}) {
       let absolute: string;
       try { absolute = new URL(url, state.url).href; } catch { return Promise.reject(new GenesisError("INVALID_ARGUMENT", `Not a URL: ${url}`)); }
-      return navigation("context.navigate", { url: absolute, mode: options.mode ?? "push" });
+      if (options.sameDocument !== undefined && typeof options.sameDocument !== "boolean") {
+        return Promise.reject(new GenesisError("INVALID_ARGUMENT", "sameDocument must be a boolean"));
+      }
+      const sameDocument = options.sameDocument ? { sameDocument: true } : {};
+      return navigation("context.navigate", { url: absolute, mode: options.mode ?? "push", ...sameDocument });
     },
     back: steps => navigation("context.back", steps === undefined ? {} : { steps }),
     forward: () => navigation("context.forward", {}),
