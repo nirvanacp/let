@@ -1,4 +1,4 @@
-import type { Locator } from "@nirvanacp/core";
+import type { Locator, TargetPoint } from "@nirvanacp/core";
 import { PageError } from "./errors.js";
 import { locate, type RecordLookup } from "./locate.js";
 import { isVisible } from "./read.js";
@@ -14,25 +14,28 @@ export function pollMs(waitedMs: number): number {
 
 export const sleep = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
 
-/** Why an element cannot take input now, or null when it can. */
-export function blocker(element: Element, wait: { scrolledAt?: string } = {}): "detached" | "hidden" | "disabled" | "covered" | null {
+/**
+ * Why an element cannot take input now, or null when it can. The point checked is the one the input
+ * goes to: the centre, or `point` by fractions of the box, as a step's `at` names it.
+ */
+export function blocker(element: Element, wait: { scrolledAt?: string } = {}, point: TargetPoint = {}): "detached" | "hidden" | "disabled" | "covered" | null {
   if (!element.isConnected) return "detached";
   if (!isVisible(element)) return "hidden";
   if ((element as HTMLButtonElement).disabled === true || element.closest("fieldset:disabled") && element.matches("input, select, textarea, button")) return "disabled";
   if (element.getAttribute("aria-disabled") === "true") return "disabled";
   let rect = element.getBoundingClientRect();
-  // Scrolling lays the page out again, so it happens only for a target whose middle is outside the viewport, and
+  const pointOf = (box: DOMRect) => [box.left + box.width * (point.x ?? 0.5), box.top + box.height * (point.y ?? 0.5)] as const;
+  // Scrolling lays the page out again, so it happens only for a target whose input point is outside the viewport, and
   // once per wait unless the target moved since.
-  const [midX, midY] = [rect.left + rect.width / 2, rect.top + rect.height / 2];
-  const outside = midX < 0 || midY < 0 || midX >= innerWidth || midY >= innerHeight;
+  const [pointX, pointY] = pointOf(rect);
+  const outside = pointX < 0 || pointY < 0 || pointX >= innerWidth || pointY >= innerHeight;
   const at = `${rect.left},${rect.top},${rect.width},${rect.height}`;
   if (outside && wait.scrolledAt !== at) {
     element.scrollIntoView({ block: "center", inline: "center", behavior: "instant" });
     rect = element.getBoundingClientRect();
     wait.scrolledAt = `${rect.left},${rect.top},${rect.width},${rect.height}`;
   }
-  const x = rect.left + rect.width / 2;
-  const y = rect.top + rect.height / 2;
+  const [x, y] = pointOf(rect);
   const root = element.getRootNode() as Document | ShadowRoot;
   const hit = root.elementFromPoint?.(x, y) ?? null;
   // Outside the viewport (an element larger than it, say) elementFromPoint says nothing; do not call that covered.
@@ -46,7 +49,7 @@ export function blocker(element: Element, wait: { scrolledAt?: string } = {}): "
  * Finds the target and waits up to `timeoutMs` for it to exist and take input. With `force`, only
  * existence is waited for. Fails with the locate error, or `NOT_ACTIONABLE` and the reason.
  */
-export async function actionable(locator: Locator, records: RecordLookup, options: { timeoutMs?: number; force?: boolean }, stop: () => boolean): Promise<Element> {
+export async function actionable(locator: Locator, records: RecordLookup, options: { timeoutMs?: number; force?: boolean; at?: TargetPoint }, stop: () => boolean): Promise<Element> {
   const started = Date.now();
   const deadline = started + Math.max(0, options.timeoutMs ?? 0);
   const wait = {};
@@ -54,7 +57,7 @@ export async function actionable(locator: Locator, records: RecordLookup, option
     let failure: PageError;
     try {
       const element = locate(locator, records);
-      const reason = options.force ? null : blocker(element, wait);
+      const reason = options.force ? null : blocker(element, wait, options.at);
       if (reason === null) return element;
       failure = new PageError("NOT_ACTIONABLE", `The target is ${reason}`, { reason });
     } catch (error) {

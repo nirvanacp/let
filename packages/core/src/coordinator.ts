@@ -98,7 +98,8 @@ export type CoordinatorEvent =
   /** Shows the context the person opened a link in, without pinning its website. */
   | { type: "user.showContext"; id: string }
   | { type: "user.done"; id: string }
-  | { type: "navigate.url"; url: string; context?: string; mode: NavigateMode }
+  /** `sameDocument` asks the shell to try routing inside the current document first; see `ContextHandle.navigate`. */
+  | { type: "navigate.url"; url: string; context?: string; mode: NavigateMode; sameDocument?: boolean }
   | { type: "navigate.screen"; screen: Screen; mode: "push" | "replace" | "root" }
   | { type: "select"; id: string }
   | { type: "back" }
@@ -108,7 +109,7 @@ export type CoordinatorEvent =
 export type CoordinatorEffect =
   | { type: "reveal"; id: string }
   | { type: "cover" }
-  | { type: "context.navigate"; id: string; url: string; mode: NavigateMode }
+  | { type: "context.navigate"; id: string; url: string; mode: NavigateMode; sameDocument?: boolean }
   /** Goes back `steps` entries in the context's history (1 when absent). */
   | { type: "context.back"; id: string; steps?: number }
   | { type: "context.reload"; id: string }
@@ -273,7 +274,7 @@ function apply(state: CoordinatorState, event: CoordinatorEvent, table: RouteTab
     case "navigate.url": {
       const id = event.context ?? state.active;
       if (!state.contexts[id]) return unchanged;
-      effects.push({ type: "context.navigate", id, url: event.url, mode: event.mode });
+      effects.push({ type: "context.navigate", id, url: event.url, mode: event.mode, ...(event.sameDocument ? { sameDocument: true } : {}) });
       return { state: { ...state, active: id, overlay: [], leaveGuard: null }, effects };
     }
 

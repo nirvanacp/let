@@ -25,6 +25,7 @@ import {
   type ReadSpec,
   type ScrollPosition,
   type ScrollTo,
+  type TargetPoint,
   type UrlGuard,
   type ViewId,
 } from "@nirvanacp/core";
@@ -113,8 +114,13 @@ export interface ContextHandle {
   /** Runs after each committed navigation, once `state` reflects it. */
   onNavigated(listener: (navigation: ContextNavigated) => void): () => void;
 
-  /** Navigations reject with a `GenesisError` when Genesis refuses them, such as a URL outside the declared origins. */
-  navigate(url: string, options?: { mode?: NavigateMode }): Promise<void>;
+  /**
+   * Navigations reject with a `GenesisError` when Genesis refuses them, such as a URL outside the
+   * declared origins. `sameDocument: true`, for a URL on the page's own origin, first asks the
+   * website's router to show the URL inside the current document, as a single-page website does
+   * for Back, and loads the URL when the website does not; playing audio and page state then stay.
+   */
+  navigate(url: string, options?: { mode?: NavigateMode; sameDocument?: boolean }): Promise<void>;
   back(steps?: number): Promise<void>;
   forward(): Promise<void>;
   reload(): Promise<void>;
@@ -129,8 +135,9 @@ export interface ContextHandle {
   wait(condition: { target: Locator; state: ElementState } | { url: UrlGuard } | { read: ReadSpec }, timeoutMs: number): Promise<void>;
   scroll(to: ScrollTo, options?: { target?: Locator } & CallOptions): Promise<ScrollPosition>;
 
-  click(target: Locator, options?: InputCallOptions & { gesture?: "click" | "tap" | "mouse"; count?: 1 | 2 }): Promise<ActionResult>;
-  longPress(target: Locator, options?: InputCallOptions & { ms?: number }): Promise<ActionResult>;
+  /** `at` taps or clicks a point inside the target instead of its centre; see `TargetPoint`. */
+  click(target: Locator, options?: InputCallOptions & { gesture?: "click" | "tap" | "mouse"; count?: 1 | 2; at?: TargetPoint }): Promise<ActionResult>;
+  longPress(target: Locator, options?: InputCallOptions & { ms?: number; at?: TargetPoint }): Promise<ActionResult>;
   hover(target: Locator, options?: InputCallOptions): Promise<ActionResult>;
   unhover(options?: InputCallOptions): Promise<ActionResult>;
   focus(target: Locator, options?: InputCallOptions): Promise<ActionResult>;
@@ -815,7 +822,11 @@ export function createContext(id: string, startUrl: string, session: Session): C
     navigate(url, options = {}) {
       let absolute: string;
       try { absolute = new URL(url, state.url).href; } catch { return Promise.reject(new GenesisError("INVALID_ARGUMENT", `Not a URL: ${url}`)); }
-      return navigation("context.navigate", { url: absolute, mode: options.mode ?? "push" });
+      if (options.sameDocument !== undefined && typeof options.sameDocument !== "boolean") {
+        return Promise.reject(new GenesisError("INVALID_ARGUMENT", "sameDocument must be a boolean"));
+      }
+      const sameDocument = options.sameDocument ? { sameDocument: true } : {};
+      return navigation("context.navigate", { url: absolute, mode: options.mode ?? "push", ...sameDocument });
     },
     back: steps => navigation("context.back", steps === undefined ? {} : { steps }),
     forward: () => navigation("context.forward", {}),
@@ -836,12 +847,12 @@ export function createContext(id: string, startUrl: string, session: Session): C
     },
 
     click: (target, options = {}) => {
-      const { gesture, count, ...rest } = options;
-      return run("click", target, defined({ gesture, count }), rest);
+      const { gesture, count, at, ...rest } = options;
+      return run("click", target, defined({ gesture, count, at }), rest);
     },
     longPress: (target, options = {}) => {
-      const { ms, ...rest } = options;
-      return run("longPress", target, defined({ ms }), rest);
+      const { ms, at, ...rest } = options;
+      return run("longPress", target, defined({ ms, at }), rest);
     },
     hover: (target, options) => run("hover", target, {}, options),
     unhover: options => run("unhover", undefined, {}, options),
