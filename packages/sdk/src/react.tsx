@@ -13,7 +13,7 @@ import {
   type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
-import type { ActionResult, ActivityLevel, FilesPick, GrantKind, GrantResult, Locator, ReadSpec } from "@let/core";
+import type { ActionResult, ActivityLevel, FilesPick, GrantKind, GrantResult, Locator, ReadSpec } from "@nirvanacp/core";
 import type { PickedFile } from "./client/actions.js";
 import type { ContextHandle, ContextState, Expect, PendingInput, Watch, WatchOptions } from "./client/context.js";
 import { connect, type ConnectOptions, type Genesis } from "./client/session.js";
@@ -22,7 +22,7 @@ import { createRouter, type CurrentScreen, type NavigateTarget, type Router, typ
 import type { Storage, StorageBatch, StoredDocument } from "./types.js";
 
 /**
- * `@let/sdk/react`: React bindings over the client. Every hook reads the client of the
+ * `@nirvanacp/sdk/react`: React bindings over the client. Every hook reads the client of the
  * surrounding `GenesisProvider`; `mount` connects and renders in one call.
  */
 

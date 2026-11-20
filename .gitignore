@@ -1,11 +1,14 @@
 node_modules/
 .DS_Store
 
-# Build output: package bundles, the exported builder kit, servelet builds and
+# Build output: package bundles, the exported builder kit, the servelet tools' packed
+# copies of the Go library and templates, servelet builds and
 # TypeScript incremental state. Tools regenerate all of it.
 dist/
 build/
 packages/applet-tools/kit/
+packages/servelet-tools/go/
+packages/servelet-tools/templates/
 packages/sdk/.build-lock
 .build-stamp
 *.tsbuildinfo

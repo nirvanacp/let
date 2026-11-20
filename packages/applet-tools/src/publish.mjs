@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
-import { RELEASE_FORMAT, validateReleaseRecord } from '@let/core';
+import { RELEASE_FORMAT, validateReleaseRecord } from '@nirvanacp/core';
 import { buildApplet } from './build.mjs';
 import { TOOLS_VERSION } from './compat.mjs';
 import { readApplet, requireValue, sha256, toolError } from './manifest.mjs';

@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { transform } from 'esbuild';
-import { APPLET_CHOICES, COMPAT, FRAMEWORK_VERSION, requireImplemented } from '@let/core';
+import { APPLET_CHOICES, COMPAT, FRAMEWORK_VERSION, requireImplemented } from '@nirvanacp/core';
 import { emptyDirectory, exportKit } from './kit.mjs';
 import { toolError } from './manifest.mjs';
 
@@ -18,7 +18,7 @@ function localStamp(date) {
   return { local, file: local.slice(0, 10) + '-' + local.slice(11, 19).replaceAll(':', '') };
 }
 
-const PAGE = `import { definePageModule, list } from "@let/sdk/page";
+const PAGE = `import { definePageModule, list } from "@nirvanacp/sdk/page";
 
 /** One link on the start page. Replace it with the records your applet needs. */
 export interface Link {
@@ -75,7 +75,7 @@ export default definePageModule({
 `;
 
 /** The router's table, shared by both templates: one route; any other URL shows the website. */
-const ROUTES = `import type { RouterRoute } from "@let/sdk/router";
+const ROUTES = `import type { RouterRoute } from "@nirvanacp/sdk/router";
 
 /**
  * Routes in match order. A URL without a route shows the website itself in the same session, and
@@ -90,8 +90,8 @@ export const HOME_PAGES = [{ pattern: "/" }];
 `;
 
 const REACT_MAIN = `import { memo } from "react";
-import { record } from "@let/sdk";
-import { mount, useGenesis, usePending, useRecord, useRouter, useWatch, ScrollMemory } from "@let/sdk/react";
+import { record } from "@nirvanacp/sdk";
+import { mount, useGenesis, usePending, useRecord, useRouter, useWatch, ScrollMemory } from "@nirvanacp/sdk/react";
 import type { Link } from "./page";
 import { HOME_PAGES, ROUTES } from "./routes";
 import "./theme.css";
@@ -138,8 +138,8 @@ function App() {
 void mount(<App />, { router: { routes: ROUTES, viewTransitions: true } });
 `;
 
-const VANILLA_MAIN = `import { connect, record, type WatchValue } from "@let/sdk";
-import { createRouter } from "@let/sdk/router";
+const VANILLA_MAIN = `import { connect, record, type WatchValue } from "@nirvanacp/sdk";
+import { createRouter } from "@nirvanacp/sdk/router";
 import type { Link } from "./page";
 import { HOME_PAGES, ROUTES } from "./routes";
 import "./theme.css";
@@ -240,7 +240,7 @@ const TEMPLATES = {
     dependencies: { react: '19.3.1', 'react-dom': '19.3.1' },
     devDependencies: { '@types/react': '19.3.0', '@types/react-dom': '19.3.0' },
     compilerOptions: { jsx: 'react-jsx' },
-    ui: 'React, through `mount` and the hooks of `@let/sdk/react`',
+    ui: 'React, through `mount` and the hooks of `@nirvanacp/sdk/react`',
   },
   vanilla: {
     entry: 'src/main.ts',
@@ -248,7 +248,7 @@ const TEMPLATES = {
     dependencies: {},
     devDependencies: {},
     compilerOptions: {},
-    ui: 'TypeScript without a framework, through `connect` from `@let/sdk` and `createRouter` from `@let/sdk/router`',
+    ui: 'TypeScript without a framework, through `connect` from `@nirvanacp/sdk` and `createRouter` from `@nirvanacp/sdk/router`',
   },
 };
 
@@ -302,8 +302,8 @@ export async function createApplet(directory, options) {
   const packageJson = {
     name: id, version: '0.1.0', private: true, type: 'module', engines: { node: '24.15.0' },
     scripts: { check: 'genesis-applet check .', build: 'genesis-applet build .' },
-    dependencies: { '@let/sdk': FRAMEWORK_VERSION, ...template.dependencies },
-    devDependencies: { '@let/applet-tools': FRAMEWORK_VERSION, ...template.devDependencies },
+    dependencies: { '@nirvanacp/sdk': FRAMEWORK_VERSION, ...template.dependencies },
+    devDependencies: { '@nirvanacp/applet-tools': FRAMEWORK_VERSION, ...template.devDependencies },
   };
   const tsconfig = { compilerOptions: { strict: true, noEmit: true, target: 'ES2022', module: 'ESNext', moduleResolution: 'Bundler', lib: ['ES2022', 'DOM', 'DOM.Iterable'], ...template.compilerOptions, skipLibCheck: true }, include: ['src'] };
   const files = {

@@ -1,4 +1,4 @@
-import { TEXT_MAX, type Field, type Fields, type ListValue, type ReadSpec, type Take } from "@let/core";
+import { TEXT_MAX, type Field, type Fields, type ListValue, type ReadSpec, type Take } from "@nirvanacp/core";
 import { PageError } from "./errors.js";
 import { locate, locateAll, type RecordLookup } from "./locate.js";
 import type { PageModule, Reader } from "./module.js";

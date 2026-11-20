@@ -28,7 +28,7 @@ import {
   type TargetPoint,
   type UrlGuard,
   type ViewId,
-} from "@let/core";
+} from "@nirvanacp/core";
 import { GenesisError } from "../bridge.js";
 import { AnswerTimeout, type Session } from "./session.js";
 import { debug } from "./debug.js";

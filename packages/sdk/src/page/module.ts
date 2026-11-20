@@ -1,4 +1,4 @@
-import type { Evidence, Step } from "@let/core";
+import type { Evidence, Step } from "@nirvanacp/core";
 
 /**
  * Page modules: applet code that runs in the website page next to the page agent. A module names

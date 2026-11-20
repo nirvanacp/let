@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { SERVELET_ABI } from '@let/core';
+import { SERVELET_ABI } from '@nirvanacp/core';
 import { GO_LIBRARY, readServelet, toolError } from './locate.mjs';
 
 const LIBRARY_MODULE = 'github.com/nirvanacp/let/go/servelet';

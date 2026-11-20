@@ -6,7 +6,7 @@ export interface CompiledPattern {
   rest: boolean;
 }
 
-/** A route of the router table. The applet declares its routes in code, with the router helper of `@let/sdk/router`. */
+/** A route of the router table. The applet declares its routes in code, with the router helper of `@nirvanacp/sdk/router`. */
 export interface Route {
   id: string;
   /** Literal segments, `:name` segments and an optional trailing `*`. */

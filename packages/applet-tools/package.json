@@ -1,6 +1,6 @@
 {
-  "name": "@let/applet-tools",
-  "version": "0.0.0",
+  "name": "@nirvanacp/applet-tools",
+  "version": "0.1.0-alpha.1",
   "type": "module",
   "engines": {
     "node": "24.15.0"
@@ -14,17 +14,25 @@
     ".": "./src/index.mjs"
   },
   "bin": {
-    "let-applet": "./src/cli.mjs",
-    "genesis-applet": "./src/cli.mjs"
+    "let-applet": "src/cli.mjs",
+    "genesis-applet": "src/cli.mjs"
   },
   "scripts": {
     "typecheck": "node check-syntax.mjs",
     "prepack": "node prepare-kit.mjs"
   },
   "dependencies": {
-    "@let/core": "0.0.0",
-    "@let/servelet-tools": "0.0.0",
+    "@nirvanacp/core": "0.1.0-alpha.1",
+    "@nirvanacp/servelet-tools": "0.1.0-alpha.1",
     "esbuild": "0.28.2",
     "typescript": "7.0.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nirvanacp/let.git",
+    "directory": "packages/applet-tools"
   }
 }

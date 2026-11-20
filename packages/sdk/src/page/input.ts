@@ -1,4 +1,4 @@
-import type { Locator, Step, ScrollPosition, ScrollTo, TargetPoint } from "@let/core";
+import type { Locator, Step, ScrollPosition, ScrollTo, TargetPoint } from "@nirvanacp/core";
 import { fill, setValue, submitEffect } from "./engine/form.js";
 import { actionable, sleep, waitUntil } from "./actionable.js";
 import { PageError } from "./errors.js";

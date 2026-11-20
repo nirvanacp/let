@@ -1,7 +1,6 @@
 {
-  "name": "@let/core",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@nirvanacp/core",
+  "version": "0.1.0-alpha.1",
   "type": "module",
   "exports": {
     ".": {
@@ -16,6 +15,15 @@
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test \"test/*.test.mjs\""
+    "test": "npm run build && node --test \"test/*.test.mjs\"",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nirvanacp/let.git",
+    "directory": "packages/core"
   }
 }

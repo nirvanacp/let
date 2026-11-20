@@ -68,7 +68,7 @@ A command is a function in the page module. It receives the page as it is now an
 
 ```ts
 // page module
-import { definePageModule, type CommandSteps } from "@let/sdk/page";
+import { definePageModule, type CommandSteps } from "@nirvanacp/sdk/page";
 
 function setVoted(doc: Document, args: unknown): CommandSteps | { satisfied: true } {
   const { id, voted } = (args ?? {}) as { id?: unknown; voted?: unknown };
@@ -190,7 +190,7 @@ Inputs follow the user's pace: one tap, one write (see [User-paced writes](rules
 ## Loading more
 
 ```ts
-import type { CommandSteps } from "@let/sdk/page";
+import type { CommandSteps } from "@nirvanacp/sdk/page";
 
 const lastKey = (doc: Document) => doc.querySelector("article:last-of-type")?.id ?? null;
 

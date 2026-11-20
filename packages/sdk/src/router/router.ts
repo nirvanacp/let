@@ -19,7 +19,7 @@ import {
   type RouteTable,
   type Screen,
   type TableRoute,
-} from "@let/core";
+} from "@nirvanacp/core";
 import { GenesisError } from "../bridge.js";
 import { debug } from "../client/debug.js";
 import type { Watch } from "../client/context.js";
@@ -158,7 +158,7 @@ interface Tracked {
 }
 
 /**
- * The applet's presentation rules over the client: the coordinator of `@let/core` fed with
+ * The applet's presentation rules over the client: the coordinator of `@nirvanacp/core` fed with
  * the contexts' navigations, a status per context from the matched route's `ready` watch and
  * the account watch, the shell's user events and Back. Its effects become client calls.
  */

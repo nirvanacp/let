@@ -1,4 +1,4 @@
-import { compareVersions, parseVersion } from '@let/core';
+import { compareVersions, parseVersion } from '@nirvanacp/core';
 
 export { compareVersions as compare, parseVersion as parse };
 

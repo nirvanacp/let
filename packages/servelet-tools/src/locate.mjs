@@ -1,15 +1,30 @@
+import { existsSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { validateServelet } from '@let/core';
+import { validateServelet } from '@nirvanacp/core';
 
 /** An error with a code; the CLI prints `CODE: message` and exits with 1. */
 export function toolError(code, message) { return Object.assign(new Error(message), { code }); }
 
 /** The Let checkout these tools belong to: the Go library and the templates sit beside the packages. */
 export const LET_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
-export const GO_LIBRARY = path.join(LET_ROOT, 'go', 'servelet');
-export const TEMPLATES = path.join(LET_ROOT, 'factory', 'servelets', 'templates');
+/** The package directory. A packed package carries its own `go/servelet` and `templates` (see prepare-package.mjs). */
+const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
+
+/**
+ * `repository` in the Let checkout when these tools run from one, otherwise the package's own
+ * copy `own`. The checkout wins, so a packed copy left in the package directory by `npm pack`
+ * never hides later edits to the Go library or the templates. `marker` is a file that only the
+ * real directory has.
+ */
+function repositoryOr(repository, own, marker) {
+  const checkout = path.join(LET_ROOT, repository);
+  return existsSync(path.join(checkout, marker)) ? checkout : path.join(PACKAGE_ROOT, own);
+}
+
+export const GO_LIBRARY = repositoryOr(path.join('go', 'servelet'), path.join('go', 'servelet'), 'go.mod');
+export const TEMPLATES = repositoryOr(path.join('factory', 'servelets', 'templates'), 'templates', path.join('go-default', 'main.go'));
 
 async function isDirectory(directory) {
   try { return (await stat(directory)).isDirectory(); } catch { return false; }

@@ -1,4 +1,4 @@
-import { entryKey, type ViewId } from "@let/core";
+import { entryKey, type ViewId } from "@nirvanacp/core";
 import { watchNavigation } from "./engine/observe.js";
 
 /**

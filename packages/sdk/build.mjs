@@ -15,8 +15,8 @@ async function inputs(directory) {
   }
   return result.sort();
 }
-// The SDK bundles @let/core, so its compiled output is an input too.
-const core = path.dirname(require.resolve('@let/core'));
+// The SDK bundles @nirvanacp/core, so its compiled output is an input too.
+const core = path.dirname(require.resolve('@nirvanacp/core'));
 const hash = createHash('sha256');
 for (const name of [...await inputs(path.join(cwd, 'src')), ...await inputs(core), path.join(cwd, 'package.json'), path.join(cwd, 'tsconfig.json'), fileURLToPath(import.meta.url), path.resolve(cwd, '../../tsconfig.base.json'), require.resolve('typescript/package.json'), require.resolve('esbuild/package.json')]) hash.update(await readFile(name));
 const signature = hash.digest('hex');

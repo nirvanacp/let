@@ -1,4 +1,4 @@
-import { USER_ACTION_DEADLINE_MS, type NotificationInput, type NotificationResult } from "@let/core";
+import { USER_ACTION_DEADLINE_MS, type NotificationInput, type NotificationResult } from "@nirvanacp/core";
 import type { Session } from "./session.js";
 
 export interface Notifications {

@@ -1,4 +1,4 @@
-import type { Field, Locator, Take } from "@let/core";
+import type { Field, Locator, Take } from "@nirvanacp/core";
 
 /**
  * Builders for locators and fields. They return the plain wire objects, so a locator written by

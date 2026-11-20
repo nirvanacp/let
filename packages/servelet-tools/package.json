@@ -1,24 +1,35 @@
 {
-  "name": "@let/servelet-tools",
-  "version": "0.0.0",
+  "name": "@nirvanacp/servelet-tools",
+  "version": "0.1.0-alpha.1",
   "type": "module",
   "engines": {
     "node": "24.15.0"
   },
   "files": [
     "src",
-    "check-syntax.mjs"
+    "check-syntax.mjs",
+    "go",
+    "templates"
   ],
   "exports": {
     ".": "./src/index.mjs"
   },
   "bin": {
-    "let-servelet": "./src/cli.mjs"
+    "let-servelet": "src/cli.mjs"
   },
   "scripts": {
-    "typecheck": "node check-syntax.mjs"
+    "typecheck": "node check-syntax.mjs",
+    "prepack": "node prepare-package.mjs"
   },
   "dependencies": {
-    "@let/core": "0.0.0"
+    "@nirvanacp/core": "0.1.0-alpha.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nirvanacp/let.git",
+    "directory": "packages/servelet-tools"
   }
 }

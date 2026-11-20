@@ -1,4 +1,4 @@
-import type { Locator } from "@let/core";
+import type { Locator } from "@nirvanacp/core";
 import { PageError } from "./errors.js";
 
 /** Where a locator searches: a document, an element, or an open shadow root. */

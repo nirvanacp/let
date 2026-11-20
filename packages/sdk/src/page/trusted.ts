@@ -1,4 +1,4 @@
-import type { InputEvent, Locator, Step, TargetPoint } from "@let/core";
+import type { InputEvent, Locator, Step, TargetPoint } from "@nirvanacp/core";
 import { actionable } from "./actionable.js";
 import { PageError } from "./errors.js";
 import { pointIn, refuseProtected, type InputContext, type Prepared } from "./input.js";

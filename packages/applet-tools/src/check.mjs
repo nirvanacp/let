@@ -7,7 +7,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { build } from 'esbuild';
-import { checkServelet } from '@let/servelet-tools';
+import { checkServelet } from '@nirvanacp/servelet-tools';
 import { containedFile, readApplet, requireValue, toolError } from './manifest.mjs';
 import { requireCompatible, TOOLS_TABLE } from './compat.mjs';
 
@@ -32,8 +32,8 @@ const PAGE_ENTRY = 'genesis:page-entry';
  */
 export function pageEntry(base, page) {
   const contents = page === undefined
-    ? 'import { startAgent } from "@let/sdk/page";\nstartAgent();\n'
-    : `import { startAgent } from "@let/sdk/page";\nimport definition from ${JSON.stringify('./' + page)};\nstartAgent(definition);\n`;
+    ? 'import { startAgent } from "@nirvanacp/sdk/page";\nstartAgent();\n'
+    : `import { startAgent } from "@nirvanacp/sdk/page";\nimport definition from ${JSON.stringify('./' + page)};\nstartAgent(definition);\n`;
   return {
     name: 'genesis-page-entry',
     setup(builder) {

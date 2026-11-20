@@ -36,7 +36,7 @@ A page module runs inside the website's page. Its readers turn the page into key
 
 ```ts
 // src/page.ts
-import { definePageModule, list } from "@let/sdk/page";
+import { definePageModule, list } from "@nirvanacp/sdk/page";
 
 export default definePageModule({
   readers: {
@@ -57,8 +57,8 @@ The UI watches a reader. A watch reads the page once and then sends only the rec
 
 ```tsx
 // src/main.tsx
-import { record } from "@let/sdk";
-import { useGenesis, useWatch } from "@let/sdk/react";
+import { record } from "@nirvanacp/sdk";
+import { useGenesis, useWatch } from "@nirvanacp/sdk/react";
 
 function Stories() {
   const genesis = useGenesis();
@@ -125,10 +125,10 @@ The tools refuse a choice that isn't implemented and name the ones that are. The
 
 | Path | Package | What it is |
 | --- | --- | --- |
-| `packages/sdk` | `@let/sdk` | The applet client (`@let/sdk`), the page agent and page modules (`/page`), the router helper (`/router`) and React bindings (`/react`) |
-| `packages/core` | `@let/core` | Shared rules with no DOM: manifest and servelet validation, route matching, the presentation coordinator, protocol types, the bundle format, the compatibility table and the choice tree |
-| `packages/applet-tools` | `@let/applet-tools` | The `let-applet` command, also installed as `genesis-applet` |
-| `packages/servelet-tools` | `@let/servelet-tools` | The `let-servelet` command |
+| `packages/sdk` | `@nirvanacp/sdk` | The applet client (`@nirvanacp/sdk`), the page agent and page modules (`/page`), the router helper (`/router`) and React bindings (`/react`) |
+| `packages/core` | `@nirvanacp/core` | Shared rules with no DOM: manifest and servelet validation, route matching, the presentation coordinator, protocol types, the bundle format, the compatibility table and the choice tree |
+| `packages/applet-tools` | `@nirvanacp/applet-tools` | The `let-applet` command, also installed as `genesis-applet` |
+| `packages/servelet-tools` | `@nirvanacp/servelet-tools` | The `let-servelet` command |
 | `go/servelet` | `github.com/nirvanacp/let/go/servelet` | The Go library every servelet imports: `Serve`, `DB`, `Migrate`, `JSON`, `Fail`, `Logf` |
 | `factory/` | | Instructions, guides, skills and templates for building applets and servelets |
 
@@ -167,7 +167,7 @@ The packages are not on npm yet. For now, use Let from a Genesis workspace, whic
 
 ## Versions
 
-This release matches manifest schema 6, bundle format 3, document protocol 2 and page control API 1, with every package at `0.0.0`. Genesis refuses an applet built for other versions, and `let-applet check` reports the difference before you install. Expect breaking changes until the first stable release.
+This release matches manifest schema 6, bundle format 3, document protocol 2 and page control API 1, with every package at `0.1.0-alpha.1`. Genesis refuses an applet built for other versions, and `let-applet check` reports the difference before you install. Expect breaking changes until the first stable release.
 
 ## Contributing
 

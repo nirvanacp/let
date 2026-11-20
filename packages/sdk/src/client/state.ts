@@ -1,4 +1,4 @@
-import { COMPAT } from "@let/core";
+import { COMPAT } from "@nirvanacp/core";
 import type { Session } from "./session.js";
 
 /** What the UI saves across a recreation of its document: the router's state and the app's own. */

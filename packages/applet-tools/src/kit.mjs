@@ -1,7 +1,7 @@
 import { access, mkdir, cp, readdir, writeFile, lstat } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { COMPAT, FRAMEWORK_VERSION } from '@let/core';
+import { COMPAT, FRAMEWORK_VERSION } from '@nirvanacp/core';
 import { toolError as creatorError } from './manifest.mjs';
 
 /** `kit.json`: the kit, the tools and the SDK share `FRAMEWORK_VERSION`, and build against `COMPAT`. */

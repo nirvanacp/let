@@ -1,4 +1,4 @@
-import type { Locator, TargetPoint } from "@let/core";
+import type { Locator, TargetPoint } from "@nirvanacp/core";
 import { PageError } from "./errors.js";
 import { locate, type RecordLookup } from "./locate.js";
 import { isVisible } from "./read.js";

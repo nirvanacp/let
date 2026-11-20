@@ -10,7 +10,7 @@ import {
   type PageResultParams,
   type Step,
   type ReadSpec,
-} from "@let/core";
+} from "@nirvanacp/core";
 import { connect, GenesisError, type BridgeObject, type Connection } from "../bridge.js";
 import { waitUntil } from "./actionable.js";
 import { errorBody, messageOf, PageError } from "./errors.js";

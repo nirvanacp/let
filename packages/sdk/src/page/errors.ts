@@ -1,4 +1,4 @@
-import type { CallDetails, ErrorBody, ErrorCode } from "@let/core";
+import type { CallDetails, ErrorBody, ErrorCode } from "@nirvanacp/core";
 import { GenesisError } from "../bridge.js";
 
 /** An error a page operation answers with: a shared error code, and optionally how far it got. */
