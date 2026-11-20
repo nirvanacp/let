@@ -21,7 +21,7 @@ Example request to an agent:
 
 ## Tools
 
-You need Node 24.15.0 and Go 1.24 or later on `PATH`. The `let-servelet` command comes from the `@nirvanacp/servelet-tools` package on npm, which also carries the Let Go library, so you never `go get` it. You do not need the Genesis or Let repositories.
+You need Node 24.15.0 or later and Go 1.24 or later on `PATH`. The `let-servelet` command comes from the `@nirvanacp/servelet-tools` package on npm, which also carries the Let Go library, so you never `go get` it. You do not need the Genesis or Let repositories.
 
 ```sh
 npx @nirvanacp/servelet-tools create servelets/notes --name "Notes store"

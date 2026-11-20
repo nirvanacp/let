@@ -2,7 +2,7 @@
 
 You need:
 
-- Node 24.15.0, the version the packages' `engines` names;
+- Node 24.15.0 or later, as the packages' `engines` names;
 - `adb` from the Android SDK platform tools;
 - an Android emulator or device, with the Genesis developer build installed as described below.
 

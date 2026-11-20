@@ -300,7 +300,7 @@ export async function createApplet(directory, options) {
   const { local, file: stamp } = localStamp(new Date());
   const label = markdownValue(name), site = markdownValue(origin.origin);
   const packageJson = {
-    name: id, version: '0.1.0', private: true, type: 'module', engines: { node: '24.15.0' },
+    name: id, version: '0.1.0', private: true, type: 'module', engines: { node: '>=24.15.0' },
     scripts: { check: 'genesis-applet check .', build: 'genesis-applet build .' },
     dependencies: { '@nirvanacp/sdk': FRAMEWORK_VERSION, ...template.dependencies },
     devDependencies: { '@nirvanacp/applet-tools': FRAMEWORK_VERSION, ...template.devDependencies },
