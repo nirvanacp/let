@@ -8,6 +8,10 @@ You need:
 
 You do not need the Genesis repository, Rust or the Android build tools. The tools and the SDK come from npm, and you can create the applet in any directory.
 
+The tools are tested on macOS; Linux is expected to work; Windows is untested.
+
+**Compatibility.** Genesis and the Let packages share one version line. An applet built with tools `0.2.x` runs on Genesis `0.2.x`; `dev install` and `dev status` report a mismatch, and `check` reports a difference before you install. An applet's own version in its `package.json` belongs to you and is independent of both; see [publishing](publishing.md).
+
 ## Install the Genesis developer build
 
 Download `genesis-<version>-developer.apk` from the [Genesis releases page](https://github.com/nirvanacp/genesis/releases) and install it on your emulator or device:
