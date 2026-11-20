@@ -1,5 +1,5 @@
 # Copy to .github/dependabot.yml. Dependabot proposes updates to the pinned workflow shas,
-# including the Genesis reusable workflows; update genesis-ref to the same sha in each update.
+# including the Let reusable workflows (nirvanacp/let).
 version: 2
 updates:
   - package-ecosystem: github-actions

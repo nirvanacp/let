@@ -1,0 +1,156 @@
+# Reusable workflow for applet repositories, run on a version tag: checks the tag against the
+# applet's version, rebuilds the applet with the tools and Node versions its release record names
+# and compares it with the committed build, then publishes the bundle and its release record as a
+# GitHub Release with build provenance attestations.
+# Callers: factory/applets/templates/github/genesis-release.yml.
+name: Let applet release
+
+on:
+  workflow_call:
+    inputs:
+      servelets-repository:
+        description: The repository that holds the servelets of the applets' local services, as owner/name. Leave empty when no applet has one.
+        type: string
+        default: ""
+      servelets-ref:
+        description: The full commit sha of servelets-repository to build the servelets from.
+        type: string
+        default: ""
+      go-version:
+        description: The exact Go version that builds the servelets, such as 1.26.2. Required with servelets-repository.
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Read tag
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Node matches `engines` in the repository's package.json.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: package.json
+      - name: Use the npm that packageManager names
+        run: |
+          manager="$(node -p 'require("./package.json").packageManager ?? ""')"
+          if [ -n "$manager" ]; then npm install -g "$manager"; fi
+      - run: npm ci --no-audit --no-fund
+      - id: plan
+        env:
+          TAG: ${{ github.ref_name }}
+        run: npx let-applet ci plan --source . --tag "$TAG"
+
+  verify:
+    name: Verify ${{ fromJSON(needs.plan.outputs.matrix)[0].appletId }}
+    needs: plan
+    runs-on: ubuntu-24.04
+    env:
+      APPLET_PATH: ${{ fromJSON(needs.plan.outputs.matrix)[0].path }}
+      SERVELETS: ${{ inputs.servelets-repository }}
+    steps:
+      - name: Require a published release
+        if: ${{ !fromJSON(needs.plan.outputs.matrix)[0].tools }}
+        run: |
+          echo "::error::$APPLET_PATH/published has no release record. Run let-applet publish, commit published/ and tag again."
+          exit 1
+      - name: Require the servelet inputs together
+        if: ${{ inputs.servelets-repository != '' && (inputs.servelets-ref == '' || inputs.go-version == '') }}
+        run: |
+          echo "::error::servelets-repository needs servelets-ref and go-version."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: source
+          persist-credentials: false
+      - if: ${{ inputs.servelets-repository != '' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: ${{ inputs.servelets-repository }}
+          ref: ${{ inputs.servelets-ref }}
+          path: servelets
+          persist-credentials: false
+      # The servelet's WebAssembly module must rebuild byte for byte, so Go is the exact version.
+      - if: ${{ inputs.servelets-repository != '' }}
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: ${{ inputs.go-version }}
+          check-latest: false
+          cache: false
+      # The Node version the release record names; ci verify fails on any other.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ fromJSON(needs.plan.outputs.matrix)[0].node }}
+      - name: Use the npm that packageManager names
+        working-directory: source
+        run: |
+          manager="$(node -p 'require("./package.json").packageManager ?? ""')"
+          if [ -n "$manager" ]; then npm install -g "$manager"; fi
+      - working-directory: source
+        run: npm ci --no-audit --no-fund
+      - name: Rebuild and compare
+        working-directory: source
+        run: npx let-applet ci verify --source . --path "$APPLET_PATH" ${SERVELETS:+--servelets ../servelets}
+      # The release files are written here, where the dependencies were installed, so the job that
+      # holds write permissions never runs the repository's npm dependencies or their scripts.
+      - name: Write release assets
+        working-directory: source
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REPOSITORY_ID: ${{ github.repository_id }}
+          COMMIT: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          npx let-applet ci assets --source . --path "$APPLET_PATH" --out ../out \
+            --repository-id "$REPOSITORY_ID" --repository "$REPOSITORY" --commit "$COMMIT" --tag "$TAG" --run "$RUN_URL"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-assets
+          path: out/
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Publish ${{ github.ref_name }}
+    needs: [plan, verify]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: ${{ github.repository }}
+      TAG: ${{ github.ref_name }}
+      APPLET_ID: ${{ fromJSON(needs.plan.outputs.matrix)[0].appletId }}
+      APPLET_PATH: ${{ fromJSON(needs.plan.outputs.matrix)[0].path }}
+      VERSION: ${{ fromJSON(needs.plan.outputs.matrix)[0].version }}
+    # Runs no code from the repository or its dependencies: it publishes the files the verify job wrote.
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-assets
+          path: out
+      - name: Create a draft release
+        run: |
+          prerelease=()
+          case "$VERSION" in *-*) prerelease=(--prerelease) ;; esac
+          gh release create "$TAG" --repo "$REPOSITORY" --draft --verify-tag --title "$APPLET_ID $VERSION" \
+            --notes "$APPLET_ID $VERSION from $APPLET_PATH at $GITHUB_SHA." "${prerelease[@]}"
+          gh release upload "$TAG" --repo "$REPOSITORY" "out/applet-$APPLET_ID.bundle.json" "out/applet-$APPLET_ID.release.json"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            out/applet-${{ fromJSON(needs.plan.outputs.matrix)[0].appletId }}.bundle.json
+            out/applet-${{ fromJSON(needs.plan.outputs.matrix)[0].appletId }}.release.json
+      # Published last, so immutable releases lock the assets only once they are all attached.
+      - name: Publish the release
+        run: gh release edit "$TAG" --repo "$REPOSITORY" --draft=false

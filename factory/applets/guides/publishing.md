@@ -11,7 +11,7 @@ Publish an applet so people can add it to Genesis from its GitHub repository and
 | Tag | An annotated git tag on the commit that holds the published build |
 | GitHub Release | The release CI creates for the tag, with the bundle, the release record and build provenance attestations |
 
-The release record names the applet, its version, the bundle's SHA-256 and size, the compatibility values, the origins and capabilities Genesis shows before installing, the Genesis commit that built it, and `builtAt`. Leave both files exactly as `publish` wrote them.
+The release record names the applet, its version, the bundle's SHA-256 and size, the compatibility values, the origins and capabilities Genesis shows before installing, the toolchain that built it (the `@nirvanacp/applet-tools` and `@nirvanacp/sdk` versions and the Node version), and `builtAt`. Records written by older tools also name a Genesis commit; they stay valid. Leave both files exactly as `publish` wrote them.
 
 A repository holds applets in one of two layouts:
 
@@ -20,20 +20,27 @@ A repository holds applets in one of two layouts:
 | Single-applet | `applet.json` at the repository root | `v<version>`, such as `v1.2.0` |
 | Multi-applet | Each immediate subdirectory with `applet.json`, named after its applet id | `<id>/v<version>`, such as `notes/v1.2.0` |
 
-A root `applet.json` makes the repository single-applet, and subdirectories are then ignored. `npx genesis-applet applets <repository>` lists the applets with their versions, published builds and last tags, and warns about a directory not named after its applet id.
+A root `applet.json` makes the repository single-applet, and subdirectories are then ignored. `npx let-applet applets <repository>` lists the applets with their versions, published builds and last tags, and warns about a directory not named after its applet id.
 
 ## Publish a version
 
-Run these from the applet directory unless noted. `publish` runs inside a Genesis checkout, with the applet in the checkout's applets directory: either the whole multi-applet repository is that directory (`genesis.workspace.json` names it), or a single-applet repository is cloned into it as `applets/<id>`.
+A release is rebuilt from the applet repository alone: its committed sources and `package-lock.json`, the tools version and the Node version in the record. So the tools must come from npm, installed by that lockfile:
+
+- The repository root has a `package.json` whose `devDependencies` name `@nirvanacp/applet-tools` at an exact version, and each applet names `@nirvanacp/sdk` at an exact version. In a multi-applet repository the root `package.json` lists the applet directories in `workspaces`.
+- `package-lock.json` at the repository root is committed. Install with `npm ci` and run the tools with `npx let-applet`.
+
+`publish`, `publish --verify` and `release` refuse tools or an SDK that are not installed packages, such as a linked or workspace copy, because the record could not name a published version. `publish` and `release` also refuse a missing, untracked or changed `package-lock.json`.
+
+Run these from the applet directory unless noted. Pass `--servelets <directory>` to `publish` and `release` when an applet has a local service whose servelet is not in a `servelets/` directory of an ancestor.
 
 1. Raise the version: `npm version <patch|minor|major> --no-git-tag-version`. Use a prerelease such as `npm version prerelease --preid beta --no-git-tag-version` for a test release.
-2. Write the published build: `npx genesis-applet publish .`. It runs `check`, refuses a version that is not semver, a dependency range that is not an exact version, or uncommitted changes in the Genesis checkout's `packages/`, `tools/`, `package.json` or `package-lock.json`, then builds a release bundle and writes both files into `published/`.
-3. Optionally rebuild and compare before committing: `npx genesis-applet publish . --verify`. CI runs the same comparison.
+2. Write the published build: `npx let-applet publish .`. It runs `check`, refuses a version that is not semver or a dependency range that is not an exact version, then builds a release bundle and writes both files into `published/`.
+3. Optionally rebuild and compare before committing: `npx let-applet publish . --verify`. CI runs the same comparison.
 4. Commit the version change and `published/` together.
-5. Create the tag: `npx genesis-applet release .`. It refuses uncommitted changes, a published build that is missing, out of date or ignored by git, an existing tag, and a version not higher than the last tag of this applet. It then rebuilds the applet as CI will and refuses a build that differs from `published/`, such as one written before a later source change. The rebuild needs the Genesis checkout at the commit the record names, so run `release` before moving the checkout to another commit. `--dry-run` shows the tag without creating it. It never pushes.
+5. Create the tag: `npx let-applet release .`. It refuses uncommitted changes, a published build that is missing, out of date or ignored by git, an existing tag, a version not higher than the last tag of this applet, and a record written by another tools version. It then rebuilds the applet as CI will and refuses a build that differs from `published/`, such as one written before a later source change. `--dry-run` shows the tag without creating it. It never pushes.
 6. Push the commit, then the tag: `git push`, then `git push origin <tag>`. The release workflow publishes the GitHub Release.
 
-`publish` warns when the Genesis commit is on no remote branch. CI checks Genesis out at the recorded commit, so that commit must be on GitHub before you push the tag.
+To move to newer tools, raise `@nirvanacp/applet-tools` and `@nirvanacp/sdk` in the `package.json` files, run `npm install`, commit the lockfile, then publish each applet again.
 
 ## Set up a repository
 
@@ -46,7 +53,7 @@ Copy the templates from [templates/github](../templates/github/) into the reposi
 | `dependabot.yml` | `.github/dependabot.yml` |
 | `gitattributes` | `.gitattributes` |
 
-In both workflows, replace each `<genesis-sha>` with the same full commit sha of a Genesis commit on GitHub. The check workflow runs on pull requests and on pushes to `main` and `develop`; the release workflow runs on `v*` and `*/v*` tags. `.gitattributes` keeps published builds byte for byte, so a checkout on another system never changes a bundle's hash. Make sure no `.gitignore` rule covers `published/`.
+In both workflows, replace `<let-sha>` with the full sha of a commit of the Let repository (`nirvanacp/let`) on GitHub; the reusable workflows live there. When an applet has a local service, also pass `servelets-repository`, `servelets-ref` (the full commit sha of the servelets to build) and `go-version` (the exact Go version from `go version` that built them): the servelet's WebAssembly module must rebuild byte for byte. The workflows run `npm ci`, so commit `package-lock.json` first. The check workflow runs on pull requests and on pushes to `main` and `develop`; the release workflow runs on `v*` and `*/v*` tags. `.gitattributes` keeps published builds byte for byte, so a checkout on another system never changes a bundle's hash. Make sure no `.gitignore` rule covers `published/`.
 
 The repository must be public: Genesis reads releases without an account.
 
@@ -78,10 +85,12 @@ Genesis checks for updates when the launcher opens, at most every six hours, and
 
 | Problem | Fix |
 | --- | --- |
-| `PUBLISH_MISMATCH` from `publish --verify`, `release` or the check workflow | The listed fields differ between the committed build and a rebuild. Run `publish` again and commit, with the Genesis commit checked out that the record names. A changed line ending in `published/` means `.gitattributes` is missing. The Node version in the record is not compared |
-| `release` says the build was made with another Genesis commit | Check out the Genesis commit the record names, or run `publish` again with the current one and commit |
-| `was published with Genesis <sha>; check out that commit` | The record names a different Genesis commit than the checkout. Check out that commit, or run `publish` again with the current one |
+| `PUBLISH_MISMATCH` from `publish --verify`, `release` or the check workflow | The listed fields differ between the committed build and a rebuild. Run `npm ci`, then `publish` again and commit. A changed line ending in `published/` means `.gitattributes` is missing. `publish --verify` does not compare the Node version; the check workflow runs the recorded one |
+| `publish` says the tools or the SDK are not an installed package | Run `npm ci` in the applet repository and use `npx let-applet`, not a linked or workspace copy of the tools |
+| `publish` says `package-lock.json` is not committed or has changes | Run `npm install` at the repository root and commit `package-lock.json` |
+| `release` or the check workflow says the record was made with other tools | The installed `@nirvanacp/applet-tools` differs from the record. Run `npm ci` from the committed lockfile, or publish again with the current tools and commit |
+| The check workflow says the record names another Node version | CI runs the Node version in the record. Publish again with the Node version the tools' `engines` names |
 | The release workflow names a different version for the tag | The tag does not match `package.json`. Delete the unpushed tag, fix the version, publish, commit and tag again |
-| The check workflow cannot check out Genesis | The recorded Genesis commit is not on GitHub |
+| The check workflow cannot check out the servelets | `servelets-ref` is not a commit of `servelets-repository` on GitHub |
 | Genesis shows "GitHub rate limit reached" | Genesis reads GitHub without an account. Try again after the time it shows |
 | Genesis shows that a version needs a newer Genesis | The release was built with tools newer than the user's Genesis. Users update Genesis; you can also keep an older release available |
