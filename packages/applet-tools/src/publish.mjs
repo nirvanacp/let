@@ -24,7 +24,9 @@ const insideNodeModules = file => file.split(path.sep).includes('node_modules');
  * from tools and an SDK installed with npm from the applet repository's committed lockfile, so this
  * refuses a workspace checkout or a linked package (whose real path is outside `node_modules`)
  * and, with `requireLockfile`, a missing, untracked or changed `package-lock.json` at the root of
- * the applet repository.
+ * the applet repository, and tools or an SDK installed over it (`npm install --no-save` of another
+ * copy, as `link-framework` does), which npm records in `node_modules/.package-lock.json` with a
+ * different source than the committed lockfile names.
  */
 export async function installedTools(base, { requireLockfile }) {
   const tools = await realpath(fileURLToPath(new URL('..', import.meta.url)));
@@ -41,8 +43,44 @@ export async function installedTools(base, { requireLockfile }) {
     requireValue(tracked === LOCKFILE, `${path.join(root, LOCKFILE)} is not committed. Run npm install in ${root} and commit ${LOCKFILE}, so the release can be rebuilt from it.`);
     const dirty = git(root, ['status', '--porcelain', '--', LOCKFILE]);
     requireValue(!dirty, `${path.join(root, LOCKFILE)} has uncommitted changes, so it would not describe the build. Commit it first.`);
+    await requireLockedCopies(await realpath(root), [['@nirvanacp/applet-tools', tools], [SDK, sdkFile]]);
   }
   return { tools: TOOLS_VERSION, sdk };
+}
+
+/** The `packages` key of an installed package, such as `node_modules/@nirvanacp/sdk`, from a file inside it. */
+function lockKey(root, name, file) {
+  const parts = path.relative(root, file).split(path.sep);
+  const names = name.split('/');
+  for (let i = parts.length - names.length - 1; i >= 0; i--) {
+    if (parts[i] === 'node_modules' && names.every((n, j) => parts[i + 1 + j] === n)) {
+      return parts.slice(0, i + 1 + names.length).join('/');
+    }
+  }
+  return undefined;
+}
+
+async function readLock(file) {
+  try { return JSON.parse(await readFile(file, 'utf8')).packages ?? {}; }
+  catch { return undefined; }
+}
+
+/**
+ * Refuses packages whose installed copy is not the one the committed lockfile names. npm writes
+ * what it installed to `node_modules/.package-lock.json`, so a copy installed over the lockfile
+ * shows there with another `resolved` or `integrity`.
+ */
+async function requireLockedCopies(root, packages) {
+  const locked = await readLock(path.join(root, LOCKFILE));
+  const installed = await readLock(path.join(root, 'node_modules', '.package-lock.json'));
+  requireValue(locked && installed, `${path.join(root, 'node_modules')} was not installed from ${LOCKFILE}. Run npm ci in ${root}.`);
+  for (const [name, file] of packages) {
+    const key = lockKey(root, name, file);
+    const want = key && locked[key];
+    const have = key && installed[key];
+    requireValue(want && have && want.resolved === have.resolved && want.integrity === have.integrity,
+      `The installed ${name} (${file}) is not the copy ${path.join(root, LOCKFILE)} names, for example after npm run workspace -- link-framework. Run npm ci in ${root}.`);
+  }
 }
 
 async function readPackage(base) {
