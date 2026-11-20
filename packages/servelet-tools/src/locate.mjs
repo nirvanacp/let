@@ -12,14 +12,19 @@ export const LET_ROOT = fileURLToPath(new URL('../../../', import.meta.url));
 /** The package directory. A packed package carries its own `go/servelet` and `templates` (see prepare-package.mjs). */
 const PACKAGE_ROOT = fileURLToPath(new URL('../', import.meta.url));
 
-/** The package's own copy of `own` when it exists, otherwise `repository` in the Let checkout. */
-function packagedOr(own, repository) {
-  const packaged = path.join(PACKAGE_ROOT, own);
-  return existsSync(packaged) ? packaged : path.join(LET_ROOT, repository);
+/**
+ * `repository` in the Let checkout when these tools run from one, otherwise the package's own
+ * copy `own`. The checkout wins, so a packed copy left in the package directory by `npm pack`
+ * never hides later edits to the Go library or the templates. `marker` is a file that only the
+ * real directory has.
+ */
+function repositoryOr(repository, own, marker) {
+  const checkout = path.join(LET_ROOT, repository);
+  return existsSync(path.join(checkout, marker)) ? checkout : path.join(PACKAGE_ROOT, own);
 }
 
-export const GO_LIBRARY = packagedOr(path.join('go', 'servelet'), path.join('go', 'servelet'));
-export const TEMPLATES = packagedOr('templates', path.join('factory', 'servelets', 'templates'));
+export const GO_LIBRARY = repositoryOr(path.join('go', 'servelet'), path.join('go', 'servelet'), 'go.mod');
+export const TEMPLATES = repositoryOr(path.join('factory', 'servelets', 'templates'), 'templates', path.join('go-default', 'main.go'));
 
 async function isDirectory(directory) {
   try { return (await stat(directory)).isDirectory(); } catch { return false; }
