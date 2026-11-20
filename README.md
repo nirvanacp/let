@@ -185,3 +185,7 @@ This release matches manifest schema 6, bundle format 3, document protocol 2 and
 ## Contributing
 
 Changes to the packages, the tools, the Go library and the factory guidance are Genesis platform work. Follow the root `AGENTS.md` of the Genesis workspace. When a change alters what applet or servelet authors can do, update the matching guides in `factory/` in the same change. Pull requests go to `develop`.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).
