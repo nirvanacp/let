@@ -36,7 +36,7 @@ Do the work in `init` that every request needs, such as migrations and building 
 
 ## Building
 
-`let-servelet build <directory>` needs Go 1.24 or later on `PATH`. It writes `dist/go.work`, which adds the Let Go library from the Let checkout, then runs `go mod download`, `go vet` and `go build` with `GOOS=wasip1 GOARCH=wasm` and `-buildmode=c-shared`, and checks the module's imports and exports. The library is not published, so do not `go get` it; the workspace file supplies it.
+`let-servelet build <directory>` needs Go 1.24 or later on `PATH`. It writes `dist/go.work`, which adds the Let Go library from the copy inside the installed `@nirvanacp/servelet-tools` package (or from the Let repository when the tools run there), then runs `go mod download`, `go vet` and `go build` with `GOOS=wasip1 GOARCH=wasm` and `-buildmode=c-shared`, and checks the module's imports and exports. The library is not published as a Go module, so do not `go get` it; the workspace file supplies it, at the version that matches the tools.
 
 A build for the computer (`go build` without the flags) compiles, so editors and `go vet` work, but every database or log call panics.
 

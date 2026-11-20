@@ -141,8 +141,8 @@ The tools refuse a choice that isn't implemented and name the ones that are. The
 | `create <dir> --origin <https://host>` | Starts an applet from the `react` (default) or `vanilla` template |
 | `check <dir>` | Checks compatibility and the manifest, type-checks, and loads the page module |
 | `build <dir>` | Bundles the UI, the page module and any local servelets into `dist/` |
-| `dev install <dir> --device <serial>` | Sends the last build to a debug Genesis over `adb`, which applies it without a restart |
-| `dev status`, `dev cookies` | Lists installed applets; copies a desktop Chrome sign-in into a debug Genesis |
+| `dev install <dir> --device <serial>` | Sends the last build to the Genesis developer build over `adb`, which applies it without a restart. Add `--application app.nirvana.genesis.dev` |
+| `dev status`, `dev cookies` | Lists installed applets; copies a desktop Chrome sign-in into the developer build |
 | `publish <dir>`, `release <dir>` | Writes the published build and tags the version for GitHub release |
 | `kit export --out <dir>` | Writes the applet guidance with its version record |
 
@@ -157,13 +157,26 @@ The tools refuse a choice that isn't implemented and name the ones that are. The
 
 Every command accepts `--json`. `check` and `build` run the project's own code, so run them only on code you trust.
 
-## Requirements and setup
+## Requirements and install
 
 - Node 24.15.0
 - Go 1.24 or later, to build servelets
-- A debug build of Genesis on an Android device or emulator reachable over `adb`, to install and try applets
+- The Genesis developer build, `genesis-<version>-developer.apk` from the [Genesis releases page](https://github.com/nirvanacp/genesis/releases), on an Android device or emulator reachable over `adb`, to install and try applets
 
-The packages are not on npm yet. For now, use Let from a Genesis workspace, which checks this repository out at `let/` and builds the packages through its npm workspace. The [Genesis README](https://github.com/nirvanacp/genesis#build-your-own-applet) covers setup.
+You don't need this repository or the Genesis repository to build an app. The packages are published to npm; until their first release is there, install tarballs made with `npm pack` from a Let checkout instead:
+
+| Package | Install |
+| --- | --- |
+| `@nirvanacp/applet-tools` | `npx @nirvanacp/applet-tools create my-applet --origin https://example.com` starts an applet; the applet's `package.json` then names the tools as a dev dependency |
+| `@nirvanacp/sdk` | `npm install @nirvanacp/sdk --save-exact`; `create` adds it for you |
+| `@nirvanacp/servelet-tools` | `npx @nirvanacp/servelet-tools create servelets/notes` starts a servelet; it comes with the applet tools, and carries the Go library |
+| `@nirvanacp/core` | Installed by the other packages; install it directly only to validate manifests or match routes in your own code |
+
+[Getting started](factory/applets/guides/getting-started.md) goes from an empty directory to an applet on a device, and the [servelet factory](factory/servelets/README.md) covers servelets.
+
+## Releases
+
+A tag `v<version>` on this repository runs [npm-publish.yml](.github/workflows/npm-publish.yml), which checks that the tag equals every package's version and publishes the four packages to npm with provenance. Every package shares one version, and applet repositories pin it exactly.
 
 ## Versions
 

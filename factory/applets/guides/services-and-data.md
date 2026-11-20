@@ -133,11 +133,11 @@ This section applies to remote services; a local servelet has nothing to start. 
 
 ```sh
 npx genesis-applet service start . --local                      # local process and health check
-npx genesis-applet service start . --device emulator-5554       # also forwards the port and connects the debug app
+npx genesis-applet service start . --device emulator-5554       # also forwards the port and connects Genesis on the device
 npx genesis-applet service status . --local
 npx genesis-applet service stop . --local                       # data is preserved
 ```
 
-The tools keep the token, a self-signed certificate, the database and the log in a private directory under `~/.local/share/genesis/services/<applet-id>/<service-id>/`. Never print, copy or commit its contents. `service provision . --device <serial>` with `GENESIS_SERVICE_ORIGIN` and `GENESIS_SERVICE_TOKEN_FILE` connects the device to a remote server instead. The user can also enter a server address and token under Service connections in the Genesis menu.
+With the Genesis developer build, add `--application app.nirvana.genesis.dev` to each `--device` command, as for `dev install`. The tools keep the token, a self-signed certificate, the database and the log in a private directory under `~/.local/share/genesis/services/<applet-id>/<service-id>/`. Never print, copy or commit its contents. `service provision . --device <serial>` with `GENESIS_SERVICE_ORIGIN` and `GENESIS_SERVICE_TOKEN_FILE` connects the device to a remote server instead. The user can also enter a server address and token under Service connections in the Genesis menu.
 
 Give each service a fixed port that no other applet in the same workspace uses, and record it. A collection of applets may keep a port registry and a `start.sh` per applet that runs these commands; keep them current when you add or change a service.
