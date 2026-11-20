@@ -1,7 +1,7 @@
-import type { InputEvent, Locator, Step } from "@nirvanacp/core";
+import type { InputEvent, Locator, Step, TargetPoint } from "@nirvanacp/core";
 import { actionable } from "./actionable.js";
 import { PageError } from "./errors.js";
-import { refuseProtected, type InputContext, type Prepared } from "./input.js";
+import { pointIn, refuseProtected, type InputContext, type Prepared } from "./input.js";
 import { isTextField } from "./read.js";
 
 /**
@@ -18,12 +18,12 @@ export const TRUSTED_OPS = new Set(["click", "hover", "unhover", "type", "press"
 
 /** Like `prepare`, for a step with `input: "trusted"`. Throws when the target is missing, not actionable or protected. */
 export async function prepareTrusted(step: Step, context: InputContext, send: SendInput): Promise<Prepared> {
-  const target = async (locator: Locator, options: { timeoutMs?: number; force?: boolean }) =>
+  const target = async (locator: Locator, options: { timeoutMs?: number; force?: boolean; at?: TargetPoint }) =>
     actionable(locator, context.records, options, context.stop);
   switch (step.op) {
     case "click": {
       const element = await target(step.target, step);
-      return { element, run: () => send([{ type: "tap", ...point(element) }]) };
+      return { element, run: () => send([{ type: "tap", ...point(element, step.at) }]) };
     }
     case "hover": {
       const element = await target(step.target, step);
@@ -68,15 +68,13 @@ export async function prepareTrusted(step: Step, context: InputContext, send: Se
 }
 
 /**
- * The element's center in CSS pixels of the visual viewport at scale 1, the unit the shell
+ * The element's centre, or the point `at` names, in CSS pixels of the visual viewport at scale 1, the unit the shell
  * multiplies by the display density. Measured when the input runs, after the scroll into view.
  * An element of a same-origin frame is measured in its frame's viewport, so each containing
  * frame's content-box offset is added to reach the top page's layout viewport.
  */
-function point(element: Element): { x: number; y: number } {
-  const rect = element.getBoundingClientRect();
-  let left = rect.left + rect.width / 2;
-  let top = rect.top + rect.height / 2;
+function point(element: Element, at?: TargetPoint): { x: number; y: number } {
+  let { x: left, y: top } = pointIn(element, at);
   for (let frame = frameOf(element.ownerDocument); frame; frame = frameOf(frame.ownerDocument)) {
     const box = frame.getBoundingClientRect();
     const style = frame.ownerDocument.defaultView!.getComputedStyle(frame);

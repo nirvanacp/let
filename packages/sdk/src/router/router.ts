@@ -79,7 +79,7 @@ export interface RouterOptions {
 
 /** `{ url }` loads a website URL in a context; `{ screen }` opens an overlay screen. */
 export type NavigateTarget =
-  | { url: string; context?: string; mode?: NavigateMode }
+  | { url: string; context?: string; mode?: NavigateMode; sameDocument?: boolean }
   | { screen: string; params?: Record<string, string>; mode?: "push" | "replace" | "root" };
 
 /** What the UI renders now: the top overlay screen, or the route screen of the active context. */
@@ -280,7 +280,7 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
         return true; // `show` follows the rules after each event.
       case "context.navigate":
         if (effect.mode === "push") startPending(effect.id, effect.url);
-        genesis.context(effect.id).navigate(effect.url, { mode: effect.mode }).catch(error => {
+        genesis.context(effect.id).navigate(effect.url, { mode: effect.mode, sameDocument: effect.sameDocument }).catch(error => {
           if (endPending(effect.id)) notify();
           failed("navigate")(error);
         });
@@ -448,7 +448,8 @@ export function createRouter(genesis: Genesis, options: RouterOptions): Router {
       if (id !== state.active || state.overlay.length > 0) guarded(() => dispatch({ type: "select", id }));
       return;
     }
-    guarded(() => dispatch({ type: "navigate.url", url, context: id, mode: target.mode ?? "push" }));
+    const sameDocument = target.sameDocument === true ? { sameDocument: true } : {};
+    guarded(() => dispatch({ type: "navigate.url", url, context: id, mode: target.mode ?? "push", ...sameDocument }));
   }
 
   /**
