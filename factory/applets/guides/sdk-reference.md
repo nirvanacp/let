@@ -1,6 +1,6 @@
 # SDK reference
 
-This kit matches `@nirvanacp/sdk` `0.1.0-alpha.1`, `@nirvanacp/applet-tools` `0.1.0-alpha.1`, manifest schema `6`, bundle format `3`, protocol `2` and page control API `1` (`adapterApi` in the compatibility table). The SDK has four public entry points:
+This kit matches `@nirvanacp/sdk` `0.2.0`, `@nirvanacp/applet-tools` `0.2.0`, manifest schema `6`, bundle format `3`, protocol `2` and page control API `1` (`adapterApi` in the compatibility table). The SDK has four public entry points:
 
 | Import | Runs in | Use it for |
 | --- | --- | --- |
@@ -472,6 +472,6 @@ Every part checks the others before it runs:
 | Bundle format | 3 |
 | Protocol | 2 |
 | Page control API (`adapterApi`) | 1 |
-| SDK and tools | 0.1.0-alpha.1 |
+| SDK and tools | 0.2.0 |
 
 `check` and `build` compare `applet.json` and the `@nirvanacp/sdk` dependency with the tools and fail with `APPLET_INCOMPATIBLE`, listing each `field applet → current`. Update the applet to the current SDK and run `check` again. A bundle records its values in `bundle.json`. Genesis refuses to open an applet built for another version and marks it in the launcher as "Needs update" or "Needs a newer Genesis". `dev install` and `dev status` report the same mismatch. `connect` rejects with `PROTOCOL_MISMATCH` when the UI was built for another protocol. Protocol 2 changed how watches reach the UI, so an applet built against an SDK that speaks protocol 1 shows "Needs update" until it is rebuilt with the current SDK and installed again.
