@@ -45,6 +45,7 @@ await commit({
 - Use revision checks for every update of an existing document. On `CONFLICT`, reread and show the current state; do not overwrite.
 - Keep stored shapes versioned once they ship (`{ v: 1, ... }`), and read old shapes rather than rewriting the collection.
 - Storage belongs to the applet id. Changing the id loses it.
+- Each applet's screens run at their own origin, `https://genesis-<applet-id>.invalid`, so browser storage (`localStorage`, IndexedDB) and the applet's files are its own. Other applets cannot read them, and the applet cannot read theirs.
 
 ## Declaring a service
 

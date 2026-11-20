@@ -1,6 +1,7 @@
 {
   "name": "@nirvanacp/sdk",
-  "version": "0.1.0-alpha.1",
+  "version": "0.2.0",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": {
@@ -42,7 +43,7 @@
     "dist"
   ],
   "dependencies": {
-    "@nirvanacp/core": "0.1.0-alpha.1"
+    "@nirvanacp/core": "0.2.0"
   },
   "devDependencies": {
     "@types/react": "19.3.0",

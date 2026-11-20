@@ -1,8 +1,8 @@
 import { USER_ACTION_DEADLINE_MS, type DownloadSave, type FileHandle, type FilesPick, type FilesPicked, type ShareInput } from "@nirvanacp/core";
 import type { Session } from "./session.js";
 
-/** The page where the applet UI shows a picked file, for an `<img>` or `<video>` source. */
-const PREVIEW_BASE = "https://appassets.androidplatform.net/genesis-files/";
+/** Where the applet UI shows picked files, for an `<img>` or `<video>` source: on its own origin. */
+const PREVIEW_PATH = "/genesis-files/";
 
 /** A picked file with the URL the applet UI shows it at. */
 export interface PickedFile extends FileHandle {
@@ -44,7 +44,7 @@ interface UserActions {
 }
 
 export function previewUrl(id: string): string {
-  return PREVIEW_BASE + id;
+  return location.origin + PREVIEW_PATH + id;
 }
 
 export function createUserActions(session: Session): UserActions {

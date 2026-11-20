@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { transform } from 'esbuild';
 import { APPLET_CHOICES, COMPAT, FRAMEWORK_VERSION, requireImplemented } from '@nirvanacp/core';
@@ -300,7 +300,7 @@ export async function createApplet(directory, options) {
   const { local, file: stamp } = localStamp(new Date());
   const label = markdownValue(name), site = markdownValue(origin.origin);
   const packageJson = {
-    name: id, version: '0.1.0', private: true, type: 'module', engines: { node: '24.15.0' },
+    name: id, version: '0.1.0', private: true, type: 'module', engines: { node: '>=24.15.0' },
     scripts: { check: 'genesis-applet check .', build: 'genesis-applet build .' },
     dependencies: { '@nirvanacp/sdk': FRAMEWORK_VERSION, ...template.dependencies },
     devDependencies: { '@nirvanacp/applet-tools': FRAMEWORK_VERSION, ...template.devDependencies },
@@ -328,5 +328,33 @@ export async function createApplet(directory, options) {
     await writeFile(path.join(output, name), content, { flag: 'wx' });
   }
   await exportKit(path.join(output, 'let'));
-  return { output, appletId: id };
+  const ci = options.ci ? await writeWorkflows(output) : undefined;
+  return { output, appletId: id, ...(ci && { ci }) };
+}
+
+/** The repository files that `publishing.md` asks for, from its GitHub templates. */
+const CI_FILES = {
+  'genesis-check.yml': '.github/workflows/genesis-check.yml',
+  'genesis-release.yml': '.github/workflows/genesis-release.yml',
+  'dependabot.yml': '.github/dependabot.yml',
+  'gitattributes': '.gitattributes',
+};
+
+/**
+ * Copies the GitHub templates from the exported kit, with the Let reusable workflows pinned to
+ * the tag of these tools (`v<version>`). A tag, never a branch: a release must rebuild the same way.
+ */
+async function writeWorkflows(output) {
+  const templates = path.join(output, 'let', 'factory', 'applets', 'templates', 'github');
+  const written = [];
+  for (const [template, target] of Object.entries(CI_FILES)) {
+    const content = (await readFile(path.join(templates, template), 'utf8'))
+      .replace(/^# Copy to .*\n/m, '')
+      .replace(/^# Replace <let-sha> .*\n/m, '')
+      .replaceAll('<let-sha>', `v${FRAMEWORK_VERSION}`);
+    await mkdir(path.dirname(path.join(output, target)), { recursive: true });
+    await writeFile(path.join(output, target), content, { flag: 'wx' });
+    written.push(target);
+  }
+  return written;
 }

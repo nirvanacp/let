@@ -157,9 +157,32 @@ The tools refuse a choice that isn't implemented and name the ones that are. The
 
 Every command accepts `--json`. `check` and `build` run the project's own code, so run them only on code you trust.
 
+## Quick start
+
+You need Node 24.15.0 or later, `adb` from the Android SDK platform tools, an Android emulator or a phone with USB debugging, and Go 1.24 or later if the app needs a servelet. The tools are tested on macOS; Linux is expected to work; Windows is untested.
+
+1. Download `genesis-<version>-developer.apk` from the [Genesis releases page](https://github.com/nirvanacp/genesis/releases) and install it: `adb -s <serial> install genesis-<version>-developer.apk`. `adb devices` lists the serials.
+2. Create, check, build and install an applet:
+
+   ```sh
+   npx @nirvanacp/applet-tools create my-applet --origin https://news.ycombinator.com --ci
+   cd my-applet
+   npm install
+   npx let-applet check .
+   npx let-applet build .
+   npx let-applet dev install . --device <serial> --application app.nirvana.genesis.dev
+   npx let-applet dev status --device <serial> --application app.nirvana.genesis.dev
+   ```
+
+   `--ci` also writes the GitHub workflows that check and release the applet; leave it out if you don't publish on GitHub.
+3. For a backend, start a servelet next to the applet: `npx @nirvanacp/servelet-tools create servelets/notes`, then follow the [servelet factory](factory/servelets/README.md).
+4. Give a coding agent `my-applet/let/AGENTS.md` and a request in your own words.
+
+**Compatibility.** Genesis and the Let packages share one version line. An applet built with tools `0.2.x` runs on Genesis `0.2.x`; `dev install` and `dev status` report a mismatch. An applet's own version in its `package.json` is yours to choose and is independent of both.
+
 ## Requirements and install
 
-- Node 24.15.0
+- Node 24.15.0 or later
 - Go 1.24 or later, to build servelets
 - The Genesis developer build, `genesis-<version>-developer.apk` from the [Genesis releases page](https://github.com/nirvanacp/genesis/releases), on an Android device or emulator reachable over `adb`, to install and try applets
 
@@ -180,8 +203,12 @@ A tag `v<version>` on this repository runs [npm-publish.yml](.github/workflows/n
 
 ## Versions
 
-This release matches manifest schema 6, bundle format 3, document protocol 2 and page control API 1, with every package at `0.1.0-alpha.1`. Genesis refuses an applet built for other versions, and `let-applet check` reports the difference before you install. Expect breaking changes until the first stable release.
+This release matches manifest schema 6, bundle format 3, document protocol 2 and page control API 1, with every package at `0.2.0`. Genesis refuses an applet built for other versions, and `let-applet check` reports the difference before you install. Expect breaking changes until the first stable release.
 
 ## Contributing
 
 Changes to the packages, the tools, the Go library and the factory guidance are Genesis platform work. Follow the root `AGENTS.md` of the Genesis workspace. When a change alters what applet or servelet authors can do, update the matching guides in `factory/` in the same change. Pull requests go to `develop`.
+
+## Licence
+
+MIT, see [LICENSE](LICENSE).

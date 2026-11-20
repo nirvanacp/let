@@ -12,7 +12,7 @@ import { ciAssets, ciPlan, ciVerify } from './ci.mjs';
 
 class UsageError extends Error { constructor(message) { super(message); this.code = 'USAGE'; } }
 
-const FLAGS = ['json', 'local', 'debug', 'verify', 'dry-run'];
+const FLAGS = ['json', 'local', 'debug', 'verify', 'dry-run', 'ci'];
 function parse(args, permitted) {
   const positional = [], options = {};
   for (let i = 0; i < args.length; i++) {
@@ -31,6 +31,8 @@ const help = `let-applet (also installed as genesis-applet)
          [--template react|vanilla]              default react
          [--kind web] [--language typescript|javascript]
                                                  default web, typescript
+         [--ci]                                  also write the GitHub check and release
+                                                 workflows, pinned to this tools version
   check <directory> [--servelets <directory>]
   build <directory> [--out <directory>] [--debug] [--servelets <directory>]
                                                  default <directory>/dist
@@ -93,7 +95,7 @@ async function main(args) {
   };
   switch (command) {
     case 'create': {
-      const { positional, options } = parse(args.slice(1), ['json', 'origin', 'id', 'name', 'template', 'kind', 'language']);
+      const { positional, options } = parse(args.slice(1), ['json', 'origin', 'id', 'name', 'template', 'kind', 'language', 'ci']);
       return ['create', await createApplet(one(positional, 'target directory'), options)];
     }
     case 'check': {

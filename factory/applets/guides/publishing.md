@@ -6,7 +6,7 @@ Publish an applet so people can add it to Genesis from its GitHub repository and
 
 | Part | What it is |
 | --- | --- |
-| Version | `version` in the applet's `package.json`: `MAJOR.MINOR.PATCH` with an optional `-prerelease`, such as `1.2.0` or `1.3.0-beta.1`. Build metadata (`+...`) is refused |
+| Version | `version` in the applet's `package.json`: `MAJOR.MINOR.PATCH` with an optional `-prerelease`, such as `1.2.0` or `1.3.0-beta.1`. Build metadata (`+...`) is refused. It is yours to choose and independent of the Genesis and Let versions; it must rise with every release |
 | Published build | `published/applet-<id>.bundle.json` and `published/applet-<id>.release.json` inside the applet, committed with the sources |
 | Tag | An annotated git tag on the commit that holds the published build |
 | GitHub Release | The release CI creates for the tag, with the bundle, the release record and build provenance attestations |
@@ -44,7 +44,7 @@ To move to newer tools, raise `@nirvanacp/applet-tools` and `@nirvanacp/sdk` in 
 
 ## Set up a repository
 
-Copy the templates from [templates/github](../templates/github/) into the repository:
+`npx let-applet create <directory> --origin <https://host> --ci` writes these files into a new applet, with the Let workflows pinned to the tag `v<tools version>`. For an existing applet, copy the templates from [templates/github](../templates/github/) into the repository:
 
 | Template | Copy to |
 | --- | --- |
@@ -53,7 +53,7 @@ Copy the templates from [templates/github](../templates/github/) into the reposi
 | `dependabot.yml` | `.github/dependabot.yml` |
 | `gitattributes` | `.gitattributes` |
 
-In both workflows, replace `<let-sha>` with the full sha of a commit of the Let repository (`nirvanacp/let`) on GitHub; the reusable workflows live there. When an applet has a local service, also pass `servelets-repository`, `servelets-ref` (the full commit sha of the servelets to build) and `go-version` (the exact Go version from `go version` that built them): the servelet's WebAssembly module must rebuild byte for byte. The workflows run `npm ci`, so commit `package-lock.json` first. The check workflow runs on pull requests and on pushes to `main` and `develop`; the release workflow runs on `v*` and `*/v*` tags. `.gitattributes` keeps published builds byte for byte, so a checkout on another system never changes a bundle's hash. Make sure no `.gitignore` rule covers `published/`.
+In both workflows, replace `<let-sha>` with the tag of your tools version (`v0.2.0`) or the full sha of a commit of the Let repository (`nirvanacp/let`) on GitHub; the reusable workflows live there. A sha cannot move; a tag is easier to read and Let never moves its release tags. When an applet has a local service, also pass `servelets-repository`, `servelets-ref` (the full commit sha of the servelets to build) and `go-version` (the exact Go version from `go version` that built them): the servelet's WebAssembly module must rebuild byte for byte. The workflows run `npm ci`, so commit `package-lock.json` first. The check workflow runs on pull requests and on pushes to `main` and `develop`; the release workflow runs on `v*` and `*/v*` tags. `.gitattributes` keeps published builds byte for byte, so a checkout on another system never changes a bundle's hash. Make sure no `.gitignore` rule covers `published/`.
 
 The repository must be public: Genesis reads releases without an account.
 
