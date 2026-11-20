@@ -60,6 +60,7 @@ export type {
   ScrollPosition,
   ScrollTo,
   ShareInput,
+  TargetPoint,
   UrlGuard,
   ViewId,
 } from "@let/core";

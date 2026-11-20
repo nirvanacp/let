@@ -253,6 +253,14 @@ export function validateInput(op: string, value: Record<string, unknown>, path =
     if (value.gesture !== undefined && !GESTURES.has(value.gesture as string)) throw new InvalidSpecError(`${path}.gesture`, "must be click, tap or mouse");
     if (value.count !== undefined && value.count !== 1 && value.count !== 2) throw new InvalidSpecError(`${path}.count`, "must be 1 or 2");
   }
+  if (value.at !== undefined) {
+    if (op !== "click" && op !== "longPress") throw new InvalidSpecError(`${path}.at`, `${op} does not take a point`);
+    validateTargetPoint(value.at, `${path}.at`);
+    // The element's own `click()`, `gesture: "click"`, carries no point.
+    if (op === "click" && value.input !== "trusted" && value.gesture !== "tap" && value.gesture !== "mouse") {
+      throw new InvalidSpecError(`${path}.at`, "needs gesture tap or mouse, or input trusted");
+    }
+  }
   if (op === "longPress" && value.ms !== undefined && !(isDuration(value.ms) && value.ms <= LONG_PRESS_MS_MAX)) {
     throw new InvalidSpecError(`${path}.ms`, `must be a number from 0 to ${LONG_PRESS_MS_MAX}`);
   }
@@ -274,6 +282,18 @@ export function validateInput(op: string, value: Record<string, unknown>, path =
     if (op === "type" && (value.text as string).length > TEXT_MAX) throw new InvalidSpecError(`${path}.text`, `trusted input types at most ${TEXT_MAX} characters`);
   }
   if (value.until !== undefined) validateEvidence(value.until, `${path}.until`);
+}
+
+/** Checks a point inside a target: an object whose `x` and `y`, when present, are fractions from 0 to 1. */
+function validateTargetPoint(value: unknown, path: string): void {
+  if (!isObject(value)) throw new InvalidSpecError(path, "must be { x?, y? }");
+  for (const key of Object.keys(value)) {
+    if (key !== "x" && key !== "y") throw new InvalidSpecError(`${path}.${key}`, "is not a point field; use x and y");
+    const fraction = value[key];
+    if (!(typeof fraction === "number" && Number.isFinite(fraction) && fraction >= 0 && fraction <= 1)) {
+      throw new InvalidSpecError(`${path}.${key}`, "must be a number from 0 to 1");
+    }
+  }
 }
 
 /** Checks a `deadlineMs` of `run` or of a command's steps: absent, or a finite number above 0. */
