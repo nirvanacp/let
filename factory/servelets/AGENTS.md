@@ -4,7 +4,7 @@ A servelet is an app's own backend: a small CRUD service in Go with its own SQLi
 
 ## Scope
 
-- One servelet per task, in its own directory named after its id, inside the servelets directory of the workspace (by default `servelets/` next to the applets directory). Follow that directory's own `AGENTS.md`.
+- One servelet per task, in its own directory named after its id, in a servelets directory: the one `--servelets` or `LET_SERVELETS_DIR` names, otherwise the nearest ancestor `servelets/`; it can be its own repository. Follow that directory's own `AGENTS.md`.
 - A servelet owns records and rules. It does not read websites, hold website data or sign in anywhere; the applet does that.
 - Do not change the Let packages, the Go library or Genesis for a servelet. If something the servelet needs is missing, say so and stop.
 
