@@ -6,7 +6,7 @@ Publish an applet so people can add it to Genesis from its GitHub repository and
 
 | Part | What it is |
 | --- | --- |
-| Version | `version` in the applet's `package.json`: `MAJOR.MINOR.PATCH` with an optional `-prerelease`, such as `1.2.0` or `1.3.0-beta.1`. Build metadata (`+...`) is refused |
+| Version | `version` in the applet's `package.json`: `MAJOR.MINOR.PATCH` with an optional `-prerelease`, such as `1.2.0` or `1.3.0-beta.1`. Build metadata (`+...`) is refused. It is yours to choose and independent of the Genesis and Let versions; it must rise with every release |
 | Published build | `published/applet-<id>.bundle.json` and `published/applet-<id>.release.json` inside the applet, committed with the sources |
 | Tag | An annotated git tag on the commit that holds the published build |
 | GitHub Release | The release CI creates for the tag, with the bundle, the release record and build provenance attestations |

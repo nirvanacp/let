@@ -24,17 +24,9 @@ Use only public SDK imports (`@nirvanacp/sdk`, `@nirvanacp/sdk/page`, `@nirvanac
 
 Genesis keeps each watch's last value and shows it at once as `stale`; render from it, show a skeleton only while a watch is `loading`, and never copy website data into storage or a servelet as a cache. Use `VirtualList` for lists over 50 rows, keep pressed states and shimmer to `transform` and `opacity`, and keep `check` free of size warnings. Verify with the applet's debug log on, and never put user content in `genesis.debug` fields. See [patterns](guides/patterns.md#performance), [presentation](guides/presentation.md#loaders-and-skeletons) and [verification](guides/verification.md#diagnosing). Protocol 2 changed how watches reach the UI: an applet built with an older SDK shows "Needs update" until it is rebuilt with the current one.
 
-## Applet versions in the Genesis repository
+## Applet versions
 
-This section applies only to Genesis developers changing applets inside the Genesis repository, where the root `AGENTS.md` controls every version. Anywhere else, such as a portable kit or an applet repository outside Genesis, ignore this section and raise versions as [publishing](guides/publishing.md) describes.
-
-An applet's version is `version` in its `package.json`, as `MAJOR.MINOR.PATCH`. Before creating a pull request that changes an applet, raise the version of each changed applet with `npm version <patch|minor|major> --no-git-tag-version`, run `npm ci` in the applets directory, then `npx let-applet publish`, and commit the version with `published/`:
-
-- **Patch** (the last number, such as `0.0.1` to `0.0.2`): raise it without asking, at most once per pull request.
-- **Minor** (the middle number, such as `0.1.0`): ask the developer first, unless the request makes clear that the developer knows the change is a minor upgrade and wants it.
-- **Major** (the first number, such as `1.0.0`): always ask the developer first, even when the request seems to call for it.
-
-Never lower a version, create a tag or push a tag unless the developer asks.
+An applet's version is `version` in its `package.json`, as `MAJOR.MINOR.PATCH`. It belongs to the applet's developer: it rises with every release and never goes down, and it is independent of the Genesis and Let versions. Raise it only when the developer asks for a release, as [publishing](guides/publishing.md) describes. A collection of applets can add its own rule in its `AGENTS.md`.
 
 ## Records and completion
 
