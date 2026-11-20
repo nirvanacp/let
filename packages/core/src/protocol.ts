@@ -509,8 +509,8 @@ export interface InputOptions {
  * `navigate` and `submit` may only be the last step.
  */
 export type Step =
-  | ({ op: "click"; target: Locator; gesture?: "click" | "tap" | "mouse"; count?: 1 | 2 } & InputOptions)
-  | ({ op: "longPress"; target: Locator; ms?: number } & InputOptions)
+  | ({ op: "click"; target: Locator; gesture?: "click" | "tap" | "mouse"; count?: 1 | 2; at?: TargetPoint } & InputOptions)
+  | ({ op: "longPress"; target: Locator; ms?: number; at?: TargetPoint } & InputOptions)
   | ({ op: "hover"; target: Locator } & InputOptions)
   | { op: "unhover" }
   | ({ op: "focus" | "blur"; target: Locator } & InputOptions)
@@ -524,6 +524,17 @@ export type Step =
   | { op: "submit"; target: Locator }
   | { op: "wait"; for: WaitFor; timeoutMs: number }
   | { op: "navigate"; url: string };
+
+/**
+ * A point inside the target, as fractions of its box from its left and top edges: `{ x: 0.3 }` is
+ * 30 percent across and halfway down. Each is 0 to 1 and defaults to 0.5, the centre. `click` takes
+ * it with `gesture: "tap"`, `gesture: "mouse"` or `input: "trusted"`, and `longPress` always; the
+ * events carry the point's coordinates.
+ */
+export interface TargetPoint {
+  x?: number;
+  y?: number;
+}
 
 /**
  * How `attachFiles` hands picked files to the page: `input` sets a file input's files (default);

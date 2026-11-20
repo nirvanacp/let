@@ -80,13 +80,16 @@ const { navigate } = useRouter();
 navigate({ url: "https://example.com/item?id=42" });                 // a page in the active context
 navigate({ url: "/newest", mode: "replace" });                        // relative to the current page, replacing it
 navigate({ url: "https://example.com/account", context: "me" });     // a page in another context
+navigate({ url: "/album/42", sameDocument: true });                   // routed inside the page when the site allows
 navigate({ screen: "saved", mode: "root" });                          // an overlay screen
 ```
 
 | Target | What happens |
 | --- | --- |
-| `{ url, context?, mode? }` | Loads the URL in a context and makes that context active. With `push`, when the page shows a link to the URL and the website handles that link in the page, as a single-page website does, the page moves without a reload, so state such as playing audio stays. Otherwise the URL loads as a new page. The routes decide what shows: a route renders its screen, anything else shows the website. Relative URLs resolve against the active context's page. `mode` is `push` (default) or `replace`. It closes the overlay screens. |
+| `{ url, context?, mode?, sameDocument? }` | Loads the URL in a context and makes that context active. With `push`, when the page shows a link to the URL and the website handles that link in the page, as a single-page website does, the page moves without a reload, so state such as playing audio stays. With `sameDocument: true`, a URL the page has no link to is first offered to the website's own router (see below). Otherwise the URL loads as a new page. The routes decide what shows: a route renders its screen, anything else shows the website. Relative URLs resolve against the active context's page. `mode` is `push` (default) or `replace`. It closes the overlay screens. |
 | `{ screen, params?, mode? }` | Opens an overlay screen named in the router's `screens`. `push` (default) adds it, `replace` swaps the top one, `root` makes it the only one. |
+
+`sameDocument: true` is for a single-page website whose router follows the browser's Back and Forward. When the page has no link to the URL to click, or with `replace`, Genesis changes the page's history entry to the URL in place (`history.pushState`, or `replaceState` for `replace`) and sends the page a `popstate` event, as a Back or Forward would. When no element of the page is added or removed and the title stays the same within one second, the website did not route, and the URL loads over that entry, so history holds one entry for it either way and Back stays where it was. A URL on another origin, or with the same path and query as the current page, always loads. Leave it off for a website that renders each page on the server: there the route always falls back, one second late. It also suits only a website whose `popstate` handler reads the URL; one that, say, only closes a dialog on `popstate` shows the old content under the new URL. It applies only to the applet's own navigation; a tap on the revealed website behaves as in a browser.
 
 Use `{ url }` for every link that came from the website, so the routes decide where it goes. Navigating to the URL a context already shows switches to that context instead of adding an entry. Navigating to the same URL does not reload it; use `reload()`.
 
