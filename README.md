@@ -163,7 +163,7 @@ Every command accepts `--json`. `check` and `build` run the project's own code, 
 - Go 1.24 or later, to build servelets
 - The Genesis developer build, `genesis-<version>-developer.apk` from the [Genesis releases page](https://github.com/nirvanacp/genesis/releases), on an Android device or emulator reachable over `adb`, to install and try applets
 
-You don't need this repository or the Genesis repository to build an app. The packages are on npm:
+You don't need this repository or the Genesis repository to build an app. The packages are published to npm; until their first release is there, install tarballs made with `npm pack` from a Let checkout instead:
 
 | Package | Install |
 | --- | --- |

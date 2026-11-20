@@ -169,4 +169,4 @@ npm run workspace -- link-framework     # install packed copies of let/packages/
 npm run workspace -- unlink-framework   # npm ci in the applets, back to the npm versions
 ```
 
-The applets directory is its own npm workspace and installs the Let packages from npm. `link-framework` replaces them with copies of the checkout's `let/packages/*` without changing `package.json` or the lockfile; run it again after each framework change. `publish` refuses linked tools, so run `unlink-framework` before publishing.
+The applets directory is its own npm workspace and installs the Let packages from npm. `link-framework` replaces them with copies of the checkout's `let/packages/*` without changing `package.json` or the lockfile; a Genesis debug build runs it by itself when the framework files changed. `publish` refuses tools and an SDK that differ from the lockfile, so run `unlink-framework` before publishing.
